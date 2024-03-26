@@ -635,10 +635,17 @@ class Sugarscape:
 
     def updateRuntimeStats(self):
         for agent in self.agents:
-            if agent.depressed == True:
+            if agent.depressed == True and agent.born == self.timestep:
                 self.agentsDep.append(agent)
-            else:
+            elif agent.depressed == False and agent.born == self.timestep:
                 self.agentsNorm.append(agent)
+        depCount = 0
+        normCount = 0
+        for agent in self.agents:
+            if agent.depressed == True:
+                depCount += 1
+            else:
+                normCount += 1
         numAgents = len(self.agents)
         numAgentsDep = len(self.agentsDep)
         numAgentsNorm = len(self.agentsNorm)
@@ -664,8 +671,8 @@ class Sugarscape:
         numTraders = 0
         totalWealthLost = 0
         totalMetabolismCost = 0
-        popDep = numAgentsDep
-        popNorm = numAgentsNorm
+        popNorm = 0
+        popDep = 0
         maxPopDep = 0
         maxPopNorm = 0
         numDeathDep = 0
@@ -811,11 +818,6 @@ class Sugarscape:
             tradeVolume = 0
             agentWealthBurnRate = 0
             agentMeanTimeToLive = 0
-        
-        if popNorm > maxPopNorm:
-            maxPopNorm = popNorm
-        if popDep > maxPopDep:
-            maxPopDep = popDep
 
         #Death statistics for all agents
         numDeadAgents = len(self.deadAgents)
@@ -865,6 +867,13 @@ class Sugarscape:
         numDeathNorm = numDeadAgentsNorm #how many normal deaths each timestep
         numDeathDep = numDeadAgentsDep #how many depressed deaths each timestep
 
+        popNorm = normCount
+        popDep = depCount
+        if numAgentsNorm > maxPopNorm:
+            maxPopNorm = numAgentsNorm
+        if numAgentsDep > maxPopDep:
+            maxPopDep = numAgentsDep
+    
         self.runtimeStats["timestep"] = self.timestep
         self.runtimeStats["population"] = numAgents
         self.runtimeStats["meanMetabolism"] = meanMetabolism
@@ -911,8 +920,8 @@ class Sugarscape:
         self.runtimeStats["agentTimesToLive"] = timesToLive
         self.runtimeStats["agentTimesToLiveAgeLimited"] = timesToLiveAgeLimited
         self.runtimeStats["agentTotalMetabolism"] = agentTotalMetabolism
-        self.runtimeStats["popDep"] = popDep
         self.runtimeStats["popNorm"] = popNorm
+        self.runtimeStats["popDep"] = popDep
         self.runtimeStats["maxPopDep"] = maxPopDep
         self.runtimeStats["maxPopNorm"] = maxPopNorm
         self.runtimeStats["deathDep"] = numDeathDep
