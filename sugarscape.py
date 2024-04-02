@@ -32,12 +32,12 @@ class Sugarscape:
                                     "globalMaxSpice": configuration["environmentMaxSpice"], "spiceRegrowRate": configuration["environmentSpiceRegrowRate"],
                                     "universalSpiceIncomeInterval": configuration["environmentUniversalSpiceIncomeInterval"],
                                     "universalSugarIncomeInterval": configuration["environmentUniversalSugarIncomeInterval"],
-                                    "sugarscapeSeed": configuration["seed"]}
+                                    "equator": configuration["environmentEquator"], "sugarscapeSeed": configuration["seed"]}
         self.seed = configuration["seed"]
         self.environment = environment.Environment(configuration["environmentHeight"], configuration["environmentWidth"], self, environmentConfiguration)
         self.environmentHeight = configuration["environmentHeight"]
         self.environmentWidth = configuration["environmentWidth"]
-        self.configureEnvironment(configuration["environmentMaxSugar"], configuration["environmentMaxSpice"])
+        self.configureEnvironment(configuration["environmentMaxSugar"], configuration["environmentMaxSpice"], configuration["environmentSugarPeaks"], configuration["environmentSpicePeaks"])
         self.debug = configuration["debugMode"]
         self.agents = []
         self.agentsDep = []
@@ -64,6 +64,7 @@ class Sugarscape:
                              "agentWealthCollectedNorm": 0, "totalWealthLostNorm": 0, "agentReproducedNorm": 0, "agentStarvationDeathsNorm": 0, "agentDiseaseDeathsNorm": 0, "agentCombatDeathsNorm": 0, "agentAgingDeathsNorm": 0
                              }
         self.log = open(configuration["logfile"], 'a') if configuration["logfile"] != None else None
+        self.logFormat = configuration["logfileFormat"]
 
     def addAgent(self, agent):
         self.agents.append(agent)
@@ -177,7 +178,7 @@ class Sugarscape:
         if len(diseases) > 0 and ("all" in self.debug or "sugarscape" in self.debug):
             print("Could not place {0} diseases.".format(len(diseases)))
 
-    def configureEnvironment(self, maxSugar, maxSpice):
+    def configureEnvironment(self, maxSugar, maxSpice, sugarPeaks, spicePeaks):
         height = self.environment.height
         width = self.environment.width
         for i in range(height):
@@ -191,8 +192,8 @@ class Sugarscape:
         startY2 = math.ceil(width * 0.7)
         sugarRadiusScale = 2
         radius = math.ceil(math.sqrt(sugarRadiusScale * (height + width)))
-        self.addSugarPeak(startX1, startY1, radius, maxSugar)
-        self.addSugarPeak(startX2, startY2, radius, maxSugar)
+        for peak in sugarPeaks:
+            self.addSugarPeak(peak[0], peak[1], radius, maxSugar)
 
         startX1 = math.ceil(height * 0.7)
         startX2 = math.ceil(height * 0.3)
@@ -200,8 +201,8 @@ class Sugarscape:
         startY2 = math.ceil(width * 0.3)
         spiceRadiusScale = 2
         radius = math.ceil(math.sqrt(spiceRadiusScale * (height + width)))
-        self.addSpicePeak(startX1, startY1, radius, maxSpice)
-        self.addSpicePeak(startX2, startY2, radius, maxSpice)
+        for peak in spicePeaks:
+            self.addSpicePeak(peak[0], peak[1], radius, maxSpice)
         self.environment.findCellNeighbors()
 
     def doTimestep(self):
@@ -243,6 +244,15 @@ class Sugarscape:
         self.runtimeStats["environmentWealthCreated"] = environmentWealthCreated
         self.runtimeStats["environmentWealthTotal"] = environmentWealthTotal
         logString = '\t' + json.dumps(self.runtimeStats) + "\n]"
+        if self.logFormat == "csv":
+            logString = ""
+            # Ensure consistent ordering for CSV format
+            for stat in sorted(self.runtimeStats):
+                if logString == "":
+                    logString += "{0}".format(self.runtimeStats[stat])
+                else:
+                    logString += ",{0}".format(self.runtimeStats[stat])
+            logString += "\n"
         self.log.write(logString)
         self.log.flush()
         self.log.close()
@@ -434,14 +444,11 @@ class Sugarscape:
         inheritancePolicy = configs["agentInheritancePolicy"]
         decisionModelFactor = configs["agentDecisionModelFactor"]
         selfishnessFactor = configs["agentSelfishnessFactor"]
-        decisionModel = configs["agentDecisionModel"]
         depressionAssignment = configs["agentDepressionAssignment"]
-        # Convert clever name for default behavior
-        if decisionModel == "rawSugarscape":
-            decisionModel = "none"
         universalSpice = configs["agentUniversalSpice"]
         universalSugar = configs["agentUniversalSugar"]
         movementMode = configs["agentMovementMode"]
+        neighborhoodMode = configs["agentNeighborhoodMode"]
         visionMode = configs["agentVisionMode"]
 
         configurations = {"aggressionFactor": {"endowments": [], "curr": aggressionFactor[0], "min": aggressionFactor[0], "max": aggressionFactor[1]},
@@ -500,6 +507,7 @@ class Sugarscape:
         sexes = []
         tags = []
         immuneSystems = []
+        decisionModels = []
 
         sexDistributionCountdown = numAgents
         # Determine count of male agents and set as switch for agent generation
@@ -531,6 +539,11 @@ class Sugarscape:
                     sexDistributionCountdown -= 1
             else:
                 sexes.append(None)
+            decisionModel = configs["agentDecisionModels"][i % len(configs["agentDecisionModels"])]
+            # Convert clever name for default behavior
+            if decisionModel == "rawSugarscape":
+                decisionModel = "none"
+            decisionModels.append(decisionModel)
 
         # Keep state of random numbers to allow extending agent endowments without altering original random object state
         randomNumberReset = random.getstate()
@@ -542,8 +555,8 @@ class Sugarscape:
         for i in range(numAgents):
             agentEndowment = {"seed": self.seed, "sex": sexes[i], "tags": tags.pop(),
                               "immuneSystem": immuneSystems.pop(), "inheritancePolicy": inheritancePolicy,
-                              "decisionModel": decisionModel, "movementMode": movementMode,
-                              "visionMode": visionMode}
+                              "decisionModel": decisionModels.pop(), "movementMode": movementMode,
+                              "neighborhoodMode": neighborhoodMode, "visionMode": visionMode}
             for config in configurations:
                 # If sexes are enabled, ensure proper fertility and infertility ages are set
                 if sexes[i] == "female" and config == "femaleFertilityAge":
@@ -599,8 +612,8 @@ class Sugarscape:
         timesteps = timesteps - self.timestep
         screenshots = 0
         while t <= timesteps and len(self.agents) > 0:
-            if self.configuration["screenshots"] == True:
-                self.gui.canvas.postscript(file="screenshot{0}.ps".format(psacc), colormode="color")
+            if self.configuration["screenshots"] == True and self.configuration["headlessMode"] == False:
+                self.gui.canvas.postscript(file="screenshot{0}.ps".format(screenshots), colormode="color")
                 screenshots += 1
             self.doTimestep()
             t += 1
@@ -611,7 +624,18 @@ class Sugarscape:
     def startLog(self):
         if self.log == None:
             return
-        self.log.write("[\n")
+        if self.logFormat == "csv":
+            header = ""
+            # Ensure consistent ordering for CSV format
+            for stat in sorted(self.runtimeStats):
+                if header == "":
+                    header += "{0}".format(stat)
+                else:
+                    header += ",{0}".format(stat)
+            header += "\n"
+            self.log.write(header)
+        else:
+            self.log.write("[\n")
         self.updateRuntimeStats()
         self.writeToLog()
 
@@ -947,6 +971,15 @@ class Sugarscape:
         if self.log == None:
             return
         logString = '\t' + json.dumps(self.runtimeStats) + ",\n"
+        if self.logFormat == "csv":
+            logString = ""
+            # Ensure consistent ordering for CSV format
+            for stat in sorted(self.runtimeStats):
+                if logString == "":
+                    logString += "{0}".format(self.runtimeStats[stat])
+                else:
+                    logString += ",{0}".format(self.runtimeStats[stat])
+            logString += "\n"
         self.log.write(logString)
 
     def __str__(self):
@@ -1016,10 +1049,6 @@ def verifyConfiguration(configuration):
     if configuration["environmentMaxTribes"] > 11:
         configuration["environmentMaxTribes"] = 11
 
-    # Keep compatibility with outdated configuration files
-    if configuration["agentDecisionModel"] == "rawSugarscape":
-        configuration["agentDecisionModel"] = "none"
-
     if len(configuration["agentStartingQuadrants"]) == 0:
         configuration["agentStartingQuadrants"] = [1, 2, 3, 4]
 
@@ -1050,13 +1079,22 @@ def verifyConfiguration(configuration):
     elif "none" in configuration["debugMode"] and len(configuration["debugMode"]) > 1:
         configuration["debugMode"] = "none"
 
+    # Keep compatibility with outdated configuration files
+    if configuration["agentDecisionModel"] != None and type(configuration["agentDecisionModel"]) == str:
+            configuration["agentDecisionModels"] = [configuration["agentDecisionModel"]]
+    elif configuration["agentDecisionModel"] != None and type(configuration["agentDecisionModel"]) == list:
+            configuration["agentDecisionModels"] = configuration["agentDecisionModel"]
+    if type(configuration["agentDecisionModels"]) == str:
+            configuration["agentDecisionModels"] = [configuration["agentDecisionModels"]]
+
     return configuration
 
 if __name__ == "__main__":
     # Set default values for simulation configuration
     configuration = {"agentAggressionFactor": [0, 0],
                      "agentBaseInterestRate": [0.0, 0.0],
-                     "agentDecisionModel": "none",
+                     "agentDecisionModels": ["none"],
+                     "agentDecisionModel": None,
                      "agentDecisionModelFactor": [0, 0],
                      "agentDepressionAssignment": [0, 0],
                      "agentFemaleInfertilityAge": [0, 0],
@@ -1074,6 +1112,7 @@ if __name__ == "__main__":
                      "agentMaxFriends": [0, 0],
                      "agentMovement": [1, 6],
                      "agentMovementMode": "cardinal",
+                     "agentNeighborhoodMode": "vonNeumann",
                      "agentReplacements": 0,
                      "agentSelfishnessFactor": [-1, -1],
                      "agentSpiceMetabolism": [0, 0],
@@ -1095,6 +1134,7 @@ if __name__ == "__main__":
                      "diseaseSugarMetabolismPenalty": [0, 0],
                      "diseaseTagStringLength": [0, 0],
                      "diseaseVisionPenalty": [0, 0],
+                     "environmentEquator": -1,
                      "environmentHeight": 50,
                      "environmentMaxCombatLoot": 0,
                      "environmentMaxSpice": 0,
@@ -1104,9 +1144,11 @@ if __name__ == "__main__":
                      "environmentSeasonalGrowbackDelay": 0,
                      "environmentSeasonInterval": 0,
                      "environmentSpiceConsumptionPollutionFactor": 0,
+                     "environmentSpicePeaks": [[35, 35], [15, 15]],
                      "environmentSpiceProductionPollutionFactor": 0,
                      "environmentSpiceRegrowRate": 0,
                      "environmentSugarConsumptionPollutionFactor": 0,
+                     "environmentSugarPeaks": [[35, 15], [15, 35]],
                      "environmentSugarProductionPollutionFactor": 0,
                      "environmentSugarRegrowRate": 1,
                      "environmentUniversalSpiceIncomeInterval": 0,
@@ -1116,6 +1158,7 @@ if __name__ == "__main__":
                      "interfaceHeight": 1000,
                      "interfaceWidth": 900,
                      "logfile": None,
+                     "logfileFormat": "json",
                      "profileMode": False,
                      "screenshots": False,
                      "seed": -1,

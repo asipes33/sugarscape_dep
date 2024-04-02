@@ -44,12 +44,13 @@ class Agent:
         self.selfishnessFactor = configuration["selfishnessFactor"]
         self.decisionModel = configuration["decisionModel"]
         self.depressionAssignment = configuration["depressionAssignment"]
+        self.neighborhoodMode = configuration["neighborhoodMode"]
 
         self.alive = True
         self.age = 0
         self.cellsInRange = []
-        self.neighborhood = []
         self.lastMoved = -1
+        self.neighborhood = []
         self.vonNeumannNeighbors = {"north": None, "south": None, "east": None, "west": None}
         self.mooreNeighbors = {"north": None, "northeast": None, "northwest": None, "south": None, "southeast": None, "southwest": None, "east": None, "west": None}
         self.socialNetwork = {"father": None, "mother": None, "children": [], "friends": [], "creditors": [], "debtors": []}
@@ -109,7 +110,12 @@ class Agent:
     def addChildToCell(self, mate, cell, childConfiguration):
         sugarscape = self.cell.environment.sugarscape
         childID = sugarscape.generateAgentID()
-        child = self.spawnChild(childID, self.timestep, cell, childConfiguration)
+        childDecisionModel = childConfiguration["decisionModel"]
+        child = None
+        if childDecisionModel == self.decisionModel:
+            child = self.spawnChild(childID, self.timestep, cell, childConfiguration)
+        else:
+            child = mate.spawnChild(childID, self.timestep, cell, childConfiguration)
         child.gotoCell(cell)
         sugarscape.addAgent(child)
         child.collectResourcesAtCell()
@@ -572,18 +578,18 @@ class Agent:
 
     def findBestCell(self):
         self.findNeighborhood()
-        retaliators = self.findRetaliatorsInVision()
+        if len(self.cellsInRange) == 0:
+            return self.cell
         random.shuffle(self.cellsInRange)
 
-        bestCell = None
-        bestRange = max(self.cell.environment.height, self.cell.environment.width)
-        bestWealth = 0
-        agentX = self.cell.x
-        agentY = self.cell.y
+        retaliators = self.findRetaliatorsInVision()
         combatMaxLoot = self.cell.environment.maxCombatLoot
-        wraparound = self.findVision() + 1
-        potentialCells = []
         aggression = self.findAggression()
+
+        bestCell = None
+        bestWealth = 0
+        bestRange = max(self.cell.environment.height, self.cell.environment.width)
+        potentialCells = []
 
         for currCell in self.cellsInRange:
             cell = currCell["cell"]
@@ -596,14 +602,12 @@ class Agent:
             if prey != None and self.isNeighborValidPrey(prey) == False:
                 continue
             preyTribe = prey.tribe if prey != None else "empty"
-            preyWealth = prey.wealth if prey != None else 0
             preySugar = prey.sugar if prey != None else 0
             preySpice = prey.spice if prey != None else 0
             # Aggression factor may lead agent to see more reward than possible meaning combat itself is a reward
             welfarePreySugar = aggression * min(combatMaxLoot, preySugar)
             welfarePreySpice = aggression * min(combatMaxLoot, preySpice)
 
-            cellWealth = 0
             # Modify value of cell relative to the metabolism needs of the agent
             welfare = self.findWelfare((cell.sugar + welfarePreySugar), (cell.spice + welfarePreySpice))
             cellWealth = welfare / (1 + cell.pollution)
@@ -612,26 +616,19 @@ class Agent:
             if prey != None and retaliators[preyTribe] > self.wealth + cellWealth:
                 continue
 
-            if bestCell == None:
-                bestCell = cell
-                bestRange = travelDistance
-                bestWealth = cellWealth
-
             # Select closest cell with the most resources
             if cellWealth > bestWealth or (cellWealth == bestWealth and travelDistance < bestRange):
-                bestRange = travelDistance
                 bestCell = cell
                 bestWealth = cellWealth
-
+                bestRange = travelDistance
+                
             cellRecord = {"cell": cell, "wealth": cellWealth, "range": travelDistance}
             potentialCells.append(cellRecord)
 
         if self.decisionModelFactor > 0:
             bestCell = self.findBestEthicalCell(potentialCells, bestCell)
-        if bestCell == None:
-            bestCell = self.cell
-        if "all" in self.debug or "agent" in self.debug:
-            print("Agent {0} moving to ({1},{2})".format(self.ID, bestCell.x, bestCell.y))
+            if bestCell == None:
+                bestCell = self.cell
         return bestCell
 
     def findBestEthicalCell(self, cells, greedyBestCell=None):
@@ -700,8 +697,6 @@ class Agent:
         parentEndowments = {
         "aggressionFactor": [self.aggressionFactor, mate.aggressionFactor],
         "baseInterestRate": [self.baseInterestRate, mate.baseInterestRate],
-        "decisionModelFactor": [self.decisionModelFactor, mate.decisionModelFactor],
-        "decisionModel": [self.decisionModel, mate.decisionModel],
         "fertilityAge": [self.fertilityAge, mate.fertilityAge],
         "fertilityFactor": [self.fertilityFactor, mate.fertilityFactor],
         "infertilityAge": [self.infertilityAge, mate.infertilityAge],
@@ -713,7 +708,6 @@ class Agent:
         "maxFriends": [self.maxFriends, mate.maxFriends],
         "movement": [self.movement, mate.movement],
         "movementMode": [self.movementMode, mate.movementMode],
-        "selfishnessFactor" : [self.selfishnessFactor, mate.selfishnessFactor],
         "spiceMetabolism": [self.spiceMetabolism, mate.spiceMetabolism],
         "sugarMetabolism": [self.sugarMetabolism, mate.sugarMetabolism],
         "sex": [self.sex, mate.sex],
@@ -722,10 +716,19 @@ class Agent:
         "visionMode": [self.visionMode, mate.visionMode],
         "universalSpice": [self.universalSpice, mate.universalSpice],
         "universalSugar": [self.universalSugar, mate.universalSugar],
-        "depressionAssignment": [0, 0]
+        "depressionAssignment": [0, 0],
+        "neighborhoodMode": [self.neighborhoodMode, mate.neighborhoodMode]
+        }
+
+        # These endowments should always come from the same parent for sensible outcomes
+        pairedEndowments = {
+        "decisionModel": [self.decisionModel, mate.decisionModel],
+        "decisionModelFactor": [self.decisionModelFactor, mate.decisionModelFactor],
+        "selfishnessFactor" : [self.selfishnessFactor, mate.selfishnessFactor],
         }
         childEndowment = {"seed": self.seed}
         randomNumberReset = random.getstate()
+
         # Map configuration to a random number via hash to make random number generation independent of iteration order
         if self.childEndowmentHashes == None:
             self.childEndowmentHashes = {}
@@ -733,10 +736,23 @@ class Agent:
                 hashed = hashlib.md5(config.encode())
                 hashNum = int(hashed.hexdigest(), 16)
                 self.childEndowmentHashes[config] = hashNum
+            for config in pairedEndowments:
+                hashed = hashlib.md5(config.encode())
+                hashNum = int(hashed.hexdigest(), 16)
+                self.childEndowmentHashes[config] = hashNum
 
         for endowment in parentEndowments:
+            index = random.randrange(2)
             random.seed(self.childEndowmentHashes[endowment] + self.timestep)
-            endowmentValue = parentEndowments[endowment][random.randrange(2)]
+            endowmentValue = parentEndowments[endowment][index]
+            childEndowment[endowment] = endowmentValue
+
+        pairedEndowmentIndex = -1
+        for endowment in pairedEndowments:
+            if pairedEndowmentIndex == -1:
+                random.seed(self.childEndowmentHashes[endowment] + self.timestep)
+                pairedEndowmentIndex = random.randrange(2)
+            endowmentValue = pairedEndowments[endowment][pairedEndowmentIndex]
             childEndowment[endowment] = endowmentValue
         
         childEndowment["depressionAssignment"] = self.depressionAssignment
@@ -1118,6 +1134,8 @@ class Agent:
 
     def moveToBestCell(self):
         bestCell = self.findBestCell()
+        if "all" in self.debug or "agent" in self.debug:
+            print("Agent {0} moving to ({1},{2})".format(self.ID, bestCell.x, bestCell.y))
         if self.findAggression() > 0:
             self.doCombat(bestCell)
         else:
@@ -1289,20 +1307,21 @@ class Agent:
                 self.payDebt(creditor)
 
     def updateMooreNeighbors(self):
+        # Necessitates finding von Neumann neighbors before invoking this method
         for direction, neighbor in self.vonNeumannNeighbors.items():
             self.mooreNeighbors[direction] = neighbor
         north = self.mooreNeighbors["north"]
         south = self.mooreNeighbors["south"]
         east = self.mooreNeighbors["east"]
         west = self.mooreNeighbors["west"]
-        self.mooreNeighbors["northeast"] = north.cell.findEastNeighbor() if north != None else None
-        self.mooreNeighbors["northeast"] = east.cell.findNorthNeighbor() if east != None and self.mooreNeighbors["northeast"] == None else None
-        self.mooreNeighbors["northwest"] = north.cell.findWestNeighbor() if north != None else None
-        self.mooreNeighbors["northwest"] = west.cell.findNorthNeighbor() if west != None and self.mooreNeighbors["northwest"] == None else None
-        self.mooreNeighbors["southeast"] = south.cell.findEastNeighbor() if south != None else None
-        self.mooreNeighbors["southeast"] = east.cell.findSouthNeighbor() if east != None and self.mooreNeighbors["southeast"] == None else None
-        self.mooreNeighbors["southwest"] = south.cell.findWestNeighbor() if south != None else None
-        self.mooreNeighbors["southwest"] = west.cell.findSouthNeighbor() if west != None and self.mooreNeighbors["southwest"] == None else None
+        self.mooreNeighbors["northeast"] = north.cell.findEastNeighbor().agent if north != None else None
+        self.mooreNeighbors["northeast"] = east.cell.findNorthNeighbor().agent if east != None and self.mooreNeighbors["northeast"] == None else None
+        self.mooreNeighbors["northwest"] = north.cell.findWestNeighbor().agent if north != None else None
+        self.mooreNeighbors["northwest"] = west.cell.findNorthNeighbor().agent if west != None and self.mooreNeighbors["northwest"] == None else None
+        self.mooreNeighbors["southeast"] = south.cell.findEastNeighbor().agent if south != None else None
+        self.mooreNeighbors["southeast"] = east.cell.findSouthNeighbor().agent if east != None and self.mooreNeighbors["southeast"] == None else None
+        self.mooreNeighbors["southwest"] = south.cell.findWestNeighbor().agent if south != None else None
+        self.mooreNeighbors["southwest"] = west.cell.findSouthNeighbor().agent if west != None and self.mooreNeighbors["southwest"] == None else None
 
     def updateMarginalRateOfSubstitutionForAgent(self, agent):
         agentID = agent.ID
@@ -1322,7 +1341,8 @@ class Agent:
         self.updateSocialNetwork()
 
     def updateSocialNetwork(self):
-        for direction, neighbor in self.vonNeumannNeighbors.items():
+        neighborhood = self.vonNeumannNeighbors if self.neighborhoodMode == "vonNeumann" else self.mooreNeighbors
+        for direction, neighbor in neighborhood.items():
             if neighbor == None:
                 continue
             neighborID = neighbor.ID
