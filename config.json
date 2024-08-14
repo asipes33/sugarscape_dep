@@ -77,7 +77,7 @@
         "logfile": "log.json",
         "profileMode": false,
         "screenshots": false,
-        "seed": 2910,
+        "seed": 6257,
         "startingAgents": 250,
         "startingDiseases": 50,
         "timesteps": 300
