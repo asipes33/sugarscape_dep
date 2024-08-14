@@ -45,6 +45,8 @@ class Sugarscape:
         self.deadAgents = []
         self.deadAgentsDep = []
         self.deadAgentsNorm = []
+        self.agentsDepTotal = []
+        self.agentsNormTotal = []
         self.diseases = []
         self.configureAgents(configuration["startingAgents"])
         self.configureDiseases(configuration["startingDiseases"])
@@ -568,6 +570,8 @@ class Sugarscape:
 
     def removeDeadAgents(self):
         deadAgents = []
+        deadAgentsDep = []
+        deadAgentsNorm = []
         for agent in self.agents:
             if agent.isAlive() == False:
                 deadAgents.append(agent)
@@ -579,8 +583,10 @@ class Sugarscape:
         for agent in deadAgents:
             if agent.depressed == True:
                 self.deadAgentsDep.append(agent)
+                self.deadAgentsDep += deadAgentsDep
             else:
                 self.deadAgentsNorm.append(agent)
+                self.deadAgentsNorm += deadAgentsNorm
 
     def replaceDeadAgents(self):
         numAgents = len(self.agents)
@@ -634,11 +640,15 @@ class Sugarscape:
         return giniCoefficient
 
     def updateRuntimeStats(self):
+        self.agentsDep = []
+        self.agentsNorm = []
         for agent in self.agents:
             if agent.depressed == True:
                 self.agentsDep.append(agent)
+                self.agentsDepTotal.append(agent)
             else:
                 self.agentsNorm.append(agent)
+                self.agentsNormTotal.append(agent)
         numAgents = len(self.agents)
         numAgentsDep = len(self.agentsDep)
         numAgentsNorm = len(self.agentsNorm)
@@ -666,8 +676,8 @@ class Sugarscape:
         totalMetabolismCost = 0
         popDep = numAgentsDep
         popNorm = numAgentsNorm
-        maxPopDep = 0
-        maxPopNorm = 0
+        maxPopDep = len(self.agentsDepTotal)
+        maxPopNorm = len(self.agentsNormTotal)
         numDeathDep = 0
         numDeathNorm = 0
 
@@ -786,20 +796,12 @@ class Sugarscape:
             meanConflictHappiness = round(meanConflictHappiness / numAgents, 2)
             agentWealthBurnRate = round(agentWealthBurnRate / numAgents, 2)
             agentMeanTimeToLive = round(agentMeanTimeToLive / numAgents, 2)
-            if len(self.agentsDep) > 0:
-                meanWealthDep = round(meanWealthDep / numAgentsDep, 2)
-                agentWealthTotalDep = round(agentWealthTotalDep, 2)
-            if len(self.agentsNorm) > 0:
-                meanWealthNorm = round(meanWealthNorm / numAgentsNorm, 2)
-                agentWealthTotalNorm = round(agentWealthTotalNorm, 2)
         else:
             meanMetabolism = 0
             meanMovement = 0
             meanVision = 0
             meanAge = 0
             meanWealth = 0
-            meanWealthDep = 0
-            meanWealthNorm = 0
             minWealth = 0
             maxWealth = 0
             meanHappiness = 0
@@ -811,7 +813,18 @@ class Sugarscape:
             tradeVolume = 0
             agentWealthBurnRate = 0
             agentMeanTimeToLive = 0
-        
+
+        if len(self.agentsDep) > 0:
+            meanWealthDep = round(meanWealthDep / numAgentsDep, 2)
+            agentWealthTotalDep = round(agentWealthTotalDep, 2)
+        else:
+            meanWealthDep = 0
+        if len(self.agentsNorm) > 0:
+            meanWealthNorm = round(meanWealthNorm / numAgentsNorm, 2)
+            agentWealthTotalNorm = round(agentWealthTotalNorm, 2)
+        else: 
+            meanWealthNorm = 0
+
         if popNorm > maxPopNorm:
             maxPopNorm = popNorm
         if popDep > maxPopDep:
@@ -911,8 +924,8 @@ class Sugarscape:
         self.runtimeStats["agentTimesToLive"] = timesToLive
         self.runtimeStats["agentTimesToLiveAgeLimited"] = timesToLiveAgeLimited
         self.runtimeStats["agentTotalMetabolism"] = agentTotalMetabolism
-        self.runtimeStats["popDep"] = popDep
-        self.runtimeStats["popNorm"] = popNorm
+        self.runtimeStats["popDep"] = numAgentsDep
+        self.runtimeStats["popNorm"] = numAgentsNorm
         self.runtimeStats["maxPopDep"] = maxPopDep
         self.runtimeStats["maxPopNorm"] = maxPopNorm
         self.runtimeStats["deathDep"] = numDeathDep

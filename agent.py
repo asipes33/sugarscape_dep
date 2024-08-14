@@ -95,8 +95,8 @@ class Agent:
         # Change metrics for depressed agents
         if self.depressed == True:
             # Eating disorders: both metabolisms will be raised to correctly represent the concept of undereating with respect to this model - with a higher metabolism they will undereat more often
-            self.sugarMetabolism = math.ceil(self.sugarMetabolism + (self.sugarMetabolism*0.6205))
-            self.spiceMetabolism = math.ceil(self.spiceMetabolism + (self.spiceMetabolism*0.6205))
+            self.sugarMetabolism = math.ceil(self.sugarMetabolism + (self.sugarMetabolism*0.544))
+            self.spiceMetabolism = math.ceil(self.spiceMetabolism + (self.spiceMetabolism*0.544))
             # Lessened movement: to represent fatigue, the agent's movement will be decreased
             self.movement = math.ceil(self.movement - (self.movement*0.375 + self.movement*0.196))
             # Aggression: to represent aggression, the agent's aggression factor will be increased
