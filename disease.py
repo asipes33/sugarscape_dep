@@ -14,4 +14,4 @@ class Disease:
         self.configuration = configuration
 
     def __str__(self):
-        return f"{self.ID}"
+        return "{self.ID}"

@@ -48,6 +48,7 @@ class Agent:
         self.universalSugar = configuration["universalSugar"]
         self.vision = configuration["vision"]
         self.visionMode = configuration["visionMode"]
+        self.depressionAssignment = configuration["depressionAssignment"]
 
         self.alive = True
         self.age = 0
@@ -59,6 +60,7 @@ class Agent:
         self.diseases = []
         self.familyHappiness = 0
         self.fertile = False
+        self.depressed = False
         self.fertilityFactorModifier = 0
         self.happiness = 0
         self.healthHappiness = 0
@@ -88,6 +90,25 @@ class Agent:
         self.tradeVolume = 0
         self.visionModifier = 0
         self.wealthHappiness = 0
+
+        # Assign agent depression based on the percentage of the population with depression
+        dep = random.randint(1, 100)
+        if dep <= self.depressionAssignment:
+            self.depressed = True
+
+        # Change metrics for depressed agents
+        if self.depressed == True:
+            # Eating disorders: both metabolisms will be raised to correctly represent the concept of undereating with respect to this model - with a higher metabolism they will undereat more often
+            self.sugarMetabolism = math.ceil(self.sugarMetabolism + (self.sugarMetabolism*0.544))
+            self.spiceMetabolism = math.ceil(self.spiceMetabolism + (self.spiceMetabolism*0.544))
+            # Lessened movement: to represent fatigue, the agent's movement will be decreased
+            self.movement = math.ceil(self.movement - (self.movement*0.375 + self.movement*0.196))
+            # Aggression: to represent aggression, the agent's aggression factor will be increased
+            self.aggressionFactor = math.ceil(self.aggressionFactor + (self.aggressionFactor*0.145))
+            # Social withdrawal: to represent a degree of social withdrawal, the maximum number of friends an agent can have will be lowered
+            self.maxFriends = math.ceil(self.maxFriends - (self.maxFriends*0.3667))
+            # An overall happiness penalty - lowering the agent's happiness - will be added to increase the emotions associated with depression
+            self.happiness = math.ceil(self.happiness - (self.happiness*0.5763))
 
     def addChildToCell(self, mate, cell, childConfiguration):
         sugarscape = self.cell.environment.sugarscape
@@ -354,7 +375,7 @@ class Agent:
                 continue
             elif borrower.isCreditWorthy(sugarLoanAmount, spiceLoanAmount, self.loanDuration) == True:
                 if "all" in self.debug or "agent" in self.debug:
-                    print(f"Agent {self.ID} lending [{sugarLoanAmount},{spiceLoanAmount}]")
+                    print("Agent {self.ID} lending [{sugarLoanAmount},{spiceLoanAmount}]")
                 self.addLoanToAgent(borrower, self.lastMoved, sugarLoanPrincipal, sugarLoanAmount, spiceLoanPrincipal, spiceLoanAmount, self.loanDuration)
 
     def doMetabolism(self):
@@ -418,7 +439,7 @@ class Agent:
                     neighbor.spice = neighbor.spice - mateSpiceCost
                     self.lastReproduced = self.cell.environment.sugarscape.timestep
                     if "all" in self.debug or "agent" in self.debug:
-                        print(f"Agent {self.ID} reproduced with agent {str(neighbor)} at cell ({emptyCell.x},{emptyCell.y})")
+                        print("Agent {self.ID} reproduced with agent {str(neighbor)} at cell ({emptyCell.x},{emptyCell.y})")
 
     def doTagging(self):
         if self.tags == None or self.isAlive() == False or self.tagging == False:
@@ -546,7 +567,7 @@ class Agent:
                 checkForMRSCrossing = spiceSellerNewMRS < sugarSellerNewMRS
                 if betterForSpiceSeller == True and betterForSugarSeller == True and checkForMRSCrossing == False:
                     if "all" in self.debug or "agent" in self.debug:
-                        print(f"Agent {self.ID} trading [{sugarPrice}, {spicePrice}]")
+                        print("Agent {self.ID} trading [{sugarPrice}, {spicePrice}]")
                     spiceSeller.sugar += sugarPrice
                     spiceSeller.spice -= spicePrice
                     sugarSeller.sugar -= sugarPrice
@@ -654,7 +675,7 @@ class Agent:
             else:
                 bestCell = greedyBestCell
             if "all" in self.debug or "agent" in self.debug:
-                print(f"Agent {self.ID} could not find an ethical cell")
+                print("Agent {self.ID} could not find an ethical cell")
         return bestCell
 
     def findBestFriend(self):
@@ -707,7 +728,8 @@ class Agent:
         "visionMode": [self.visionMode, mate.visionMode],
         "universalSpice": [self.universalSpice, mate.universalSpice],
         "universalSugar": [self.universalSugar, mate.universalSugar],
-        "neighborhoodMode": [self.neighborhoodMode, mate.neighborhoodMode]
+        "neighborhoodMode": [self.neighborhoodMode, mate.neighborhoodMode],
+        "depressionAssignment": [0, 0]
         }
 
         # These endowments should always come from the same parent for sensible outcomes
@@ -748,6 +770,11 @@ class Agent:
             endowmentValue = pairedEndowments[endowment][pairedEndowmentIndex]
             childEndowment[endowment] = endowmentValue
 
+        childEndowment["depressionAssignment"] = self.depressionAssignment
+        dep = random.randint(1, 100)
+        if dep <= self.depressionAssignment:
+            self.depressed = True
+        
         # Each parent gives a portion of their starting endowment for child endowment
         childStartingSugar = (self.startingSugar / (self.fertilityFactor * 2)) + (mate.startingSugar / (mate.fertilityFactor * 2))
         childStartingSpice = (self.startingSpice / (self.fertilityFactor * 2)) + (mate.startingSpice / (mate.fertilityFactor * 2))
@@ -1107,7 +1134,7 @@ class Agent:
     def moveToBestCell(self):
         bestCell = self.findBestCell()
         if "all" in self.debug or "agent" in self.debug:
-            print(f"Agent {self.ID} moving to ({bestCell.x},{bestCell.y})")
+            print("Agent {self.ID} moving to ({bestCell.x},{bestCell.y})")
         if self.findAggression() > 0:
             self.doCombat(bestCell)
         else:
@@ -1168,16 +1195,16 @@ class Agent:
         i = 0
         while i < len(cells):
             cell = cells[i]
-            cellString = f"({cell['cell'].x},{cell['cell'].y}) [{cell['wealth']},{cell['range']}]"
-            print(f"Cell {i + 1}/{len(cells)}: {cellString}")
+            cellString = "({cell['cell'].x},{cell['cell'].y}) [{cell['wealth']},{cell['range']}]"
+            print("Cell {i + 1}/{len(cells)}: {cellString}")
             i += 1
 
     def printEthicalCellScores(self, cells):
         i = 0
         while i < len(cells):
             cell = cells[i]
-            cellString = f"({cell['cell'].x},{cell['cell'].y}) [{cell['wealth']},{cell['range']}]"
-            print(f"Ethical cell {i + 1}/{len(cells)}: {cellString}")
+            cellString = "({cell['cell'].x},{cell['cell'].y}) [{cell['wealth']},{cell['range']}]"
+            print("Ethical cell {i + 1}/{len(cells)}: {cellString}")
             i += 1
 
     def removeDebt(self, loan):
@@ -1336,4 +1363,4 @@ class Agent:
         self.happiness = self.findHappiness()
 
     def __str__(self):
-        return f"{self.ID}"
+        return "{self.ID}"
