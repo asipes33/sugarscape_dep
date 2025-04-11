@@ -15,28 +15,33 @@ import sys
 
 class Sugarscape:
     def __init__(self, configuration):
-        self.diseaseConfigHashes = None
         self.agentConfigHashes = None
+        self.diseaseConfigHashes = None
         self.configuration = configuration
         self.maxTimestep = configuration["timesteps"]
         self.timestep = 0
         self.nextAgentID = 0
         self.nextDiseaseID = 0
-        environmentConfiguration = {"globalMaxSugar": configuration["environmentMaxSugar"], "sugarRegrowRate": configuration["environmentSugarRegrowRate"],
-                                    "seasonInterval": configuration["environmentSeasonInterval"], "seasonalGrowbackDelay": configuration["environmentSeasonalGrowbackDelay"],
-                                    "spiceConsumptionPollutionFactor": configuration["environmentSpiceConsumptionPollutionFactor"],
-                                    "sugarConsumptionPollutionFactor": configuration["environmentSugarConsumptionPollutionFactor"],
-                                    "spiceProductionPollutionFactor": configuration["environmentSpiceProductionPollutionFactor"],
-                                    "sugarProductionPollutionFactor": configuration["environmentSugarProductionPollutionFactor"],
-                                    "pollutionDiffusionDelay": configuration["environmentPollutionDiffusionDelay"], 
+        environmentConfiguration = {"equator": configuration["environmentEquator"],
+                                    "globalMaxSpice": configuration["environmentMaxSpice"],
+                                    "globalMaxSugar": configuration["environmentMaxSugar"],
+                                    "maxCombatLoot": configuration["environmentMaxCombatLoot"],
+                                    "neighborhoodMode": configuration["neighborhoodMode"],
+                                    "pollutionDiffusionDelay": configuration["environmentPollutionDiffusionDelay"],
                                     "pollutionDiffusionTimeframe": configuration["environmentPollutionDiffusionTimeframe"],
                                     "pollutionTimeframe": configuration["environmentPollutionTimeframe"],
-                                    "maxCombatLoot": configuration["environmentMaxCombatLoot"],
-                                    "globalMaxSpice": configuration["environmentMaxSpice"], "spiceRegrowRate": configuration["environmentSpiceRegrowRate"],
+                                    "seasonalGrowbackDelay": configuration["environmentSeasonalGrowbackDelay"],
+                                    "seasonInterval": configuration["environmentSeasonInterval"],
+                                    "spiceConsumptionPollutionFactor": configuration["environmentSpiceConsumptionPollutionFactor"],
+                                    "spiceProductionPollutionFactor": configuration["environmentSpiceProductionPollutionFactor"],
+                                    "spiceRegrowRate": configuration["environmentSpiceRegrowRate"],
+                                    "sugarConsumptionPollutionFactor": configuration["environmentSugarConsumptionPollutionFactor"],
+                                    "sugarProductionPollutionFactor": configuration["environmentSugarProductionPollutionFactor"],
+                                    "sugarRegrowRate": configuration["environmentSugarRegrowRate"],
+                                    "sugarscapeSeed": configuration["seed"],
                                     "universalSpiceIncomeInterval": configuration["environmentUniversalSpiceIncomeInterval"],
                                     "universalSugarIncomeInterval": configuration["environmentUniversalSugarIncomeInterval"],
-                                    "equator": configuration["environmentEquator"], "sugarscapeSeed": configuration["seed"],
-                                    "neighborhoodMode": configuration["neighborhoodMode"], "wraparound": configuration["environmentWraparound"]}
+                                    "wraparound": configuration["environmentWraparound"]}
         self.seed = configuration["seed"]
         self.environment = environment.Environment(configuration["environmentHeight"], configuration["environmentWidth"], self, environmentConfiguration)
         self.environmentHeight = configuration["environmentHeight"]
@@ -45,17 +50,10 @@ class Sugarscape:
         self.debug = configuration["debugMode"]
         self.keepAlive = configuration["keepAlivePostExtinction"]
         self.agents = []
-        self.agentsReplaced = 0
-        self.agentsBorn = 0
+        self.replacedAgents = []
+        self.bornAgents = []
         self.deadAgents = []
         self.diseases = []
-        self.agentsDep = []
-        self.agentsNorm = []
-        self.deadAgents = []
-        self.deadAgentsDep = []
-        self.deadAgentsNorm = []
-        self.agentsDepTotal = []
-        self.agentsNormTotal = []
         self.activeQuadrants = self.findActiveQuadrants()
         self.configureAgents(configuration["startingAgents"])
         self.configureDiseases(configuration["startingDiseases"])
@@ -66,21 +64,30 @@ class Sugarscape:
         # TODO: Streamline naming
         self.runtimeStats = {"timestep": 0, "population": 0, "meanMetabolism": 0, "meanMovement": 0, "meanVision": 0, "meanWealth": 0, "meanAge": 0, "giniCoefficient": 0,
                              "meanTradePrice": 0, "tradeVolume": 0, "maxWealth": 0, "minWealth": 0, "meanHappiness": 0, "meanWealthHappiness": 0, "meanHealthHappiness": 0,
-                             "meanSocialHappiness": 0, "meanFamilyHappiness": 0, "meanConflictHappiness": 0, "meanAgeAtDeath": 0, "seed": self.seed, "totalWealthLost": 0,
-                             "totalMetabolismCost": 0, "agentsReplaced": 0, "agentsBorn": 0, "agentStarvationDeaths": 0, "agentDiseaseDeaths": 0, "environmentWealthCreated": 0,
-                             "agentWealthTotal": 0, "environmentWealthTotal": 0, "agentWealthCollected": 0, "agentWealthBurnRate": 0, "agentMeanTimeToLive": 0,
-                             "agentTotalMetabolism": 0, "agentCombatDeaths": 0, "agentAgingDeaths": 0, "totalSickAgents": 0,
-                             "meanWealthDep": 0, "meanWealthNorm": 0, "meanAgeAtDeathDep": 0, "meanAgeAtDeathNorm": 0, "agentWealthTotalDep": 0, "agentWealthTotalNorm": 0,
-                             "deathDep": 0, "deathNorm": 0, "popDep": 0, "popNorm": 0, "maxPopDep": 0, "maxPopNorm": 0, 
-                             "agentWealthCollectedDep": 0, "totalWealthLostDep": 0, "agentReproducedDep": 0, "agentStarvationDeathsDep": 0, "agentDiseaseDeathsDep": 0, "agentCombatDeathsDep": 0, "agentAgingDeathsDep": 0,  
-                             "agentWealthCollectedNorm": 0, "totalWealthLostNorm": 0, "agentReproducedNorm": 0, "agentStarvationDeathsNorm": 0, "agentDiseaseDeathsNorm": 0, "agentCombatDeathsNorm": 0, "agentAgingDeathsNorm": 0}
+                             "meanSocialHappiness": 0, "meanFamilyHappiness": 0, "meanConflictHappiness": 0, "meanAgeAtDeath": 0, "seed": self.seed, "agentsReplaced": 0,
+                             "agentsBorn": 0, "agentStarvationDeaths": 0, "agentDiseaseDeaths": 0, "environmentWealthCreated": 0, "agentWealthTotal": 0,
+                             "environmentWealthTotal": 0, "agentWealthCollected": 0, "agentWealthBurnRate": 0, "agentMeanTimeToLive": 0, "agentTotalMetabolism": 0,
+                             "agentCombatDeaths": 0, "agentAgingDeaths": 0, "agentDeaths": 0, "largestTribe": 0, "largestTribeSize": 0,
+                             "remainingTribes": self.configuration["environmentMaxTribes"], "sickAgents": 0, "carryingCapacity": 0, "meanDeathsPercentage": 0,
+                             "sickAgentsPercentage": 0, "c1": 0, "c2": 0, "c3": 0, "c4": 0, "t1": 0, "t2": 0, "t3": 0, "t4": 0, "l1": 0, "l2": 0, 
+                             "l3": 0, "l4": 0, "r1": 0, "r2": 0, "r3": 0, "r4": 0, "d1": 0, "d2": 0, "d3": 0, "d4": 0}
         self.graphStats = {"ageBins": [], "sugarBins": [], "spiceBins": [], "lorenzCurvePoints": [], "meanTribeTags": [],
                            "maxSugar": 0, "maxSpice": 0, "maxWealth": 0}
         self.log = open(configuration["logfile"], 'a') if configuration["logfile"] != None else None
         self.logFormat = configuration["logfileFormat"]
+        self.experimentalGroup = configuration["experimentalGroup"]
+        if self.experimentalGroup != None:
+            # Convert keys to Pythonic case scheme and initialize values
+            groupRuntimeStats = {}
+            for key in self.runtimeStats.keys():
+                controlGroupKey = "control" + key[0].upper() + key[1:]
+                experimentalGroupKey = self.experimentalGroup + key[0].upper() + key[1:]
+                groupRuntimeStats[controlGroupKey] = 0
+                groupRuntimeStats[experimentalGroupKey] = 0
+            self.runtimeStats.update(groupRuntimeStats)
 
     def addAgent(self, agent):
-        self.agentsBorn += 1
+        self.bornAgents.append(agent)
         self.agents.append(agent)
 
     def addSpicePeak(self, startX, startY, radius, maxSpice):
@@ -122,10 +129,9 @@ class Sugarscape:
             return
         if numAgents > totalCells:
             if "all" in self.debug or "sugarscape" in self.debug:
-                print("Could not allocate {numAgents} agents. Allocating maximum of {totalCells}.")
+                print(f"Could not allocate {numAgents} agents. Allocating maximum of {totalCells}.")
             numAgents = totalCells
-        if self.timestep > 0:
-            self.agentsReplaced = numAgents
+
         # Ensure agent endowments are randomized across initial agent count to make replacements follow same distributions
         agentEndowments = self.randomizeAgentEndowments(numAgents)
         for quadrant in emptyCells:
@@ -165,6 +171,8 @@ class Sugarscape:
                 a.tribe = a.findTribe()
             randomCell.agent = a
             self.agents.append(a)
+            if self.timestep > 0:
+                self.replacedAgents.append(a)
 
         for a in self.agents:
             a.findCellsInRange()
@@ -208,7 +216,7 @@ class Sugarscape:
                 currStartingDiseases = minStartingDiseases
 
         if startingDiseases == [0, 0] and len(diseases) > 0 and ("all" in self.debug or "sugarscape" in self.debug):
-            print("Could not place {len(diseases)} diseases.")
+            print(f"Could not place {len(diseases)} diseases.")
 
     def configureEnvironment(self, maxSugar, maxSpice, sugarPeaks, spicePeaks):
         height = self.environment.height
@@ -235,7 +243,7 @@ class Sugarscape:
             self.toggleEnd()
             return
         if "all" in self.debug or "sugarscape" in self.debug:
-            print("Timestep: {self.timestep}\nLiving Agents: {len(self.agents)}")
+            print(f"Timestep: {self.timestep}\nLiving Agents: {len(self.agents)}")
         self.timestep += 1
         if self.end == True or (len(self.agents) == 0 and self.keepAlive == False):
             self.toggleEnd()
@@ -258,8 +266,6 @@ class Sugarscape:
         if self.log == None:
             return
         # Update total wealth accumulation to include still living agents at simulation end
-        for agent in self.agents:
-            self.runtimeStats["totalMetabolismCost"] += agent.sugarMetabolism + agent.spiceMetabolism
         environmentWealthCreated = 0
         environmentWealthTotal = 0
         for i in range(self.environment.width):
@@ -274,9 +280,9 @@ class Sugarscape:
             # Ensure consistent ordering for CSV format
             for stat in sorted(self.runtimeStats):
                 if logString == "":
-                    logString += "{self.runtimeStats[stat]}"
+                    logString += f"{self.runtimeStats[stat]}"
                 else:
-                    logString += ",{self.runtimeStats[stat]}"
+                    logString += f",{self.runtimeStats[stat]}"
             logString += "\n"
         self.log.write(logString)
         self.log.flush()
@@ -355,6 +361,283 @@ class Sugarscape:
                 self.gui.window.update()
             if self.end == True:
                 self.endSimulation()
+
+    def randomizeDiseaseEndowments(self, numDiseases):
+        configs = self.configuration
+        aggressionPenalty = configs["diseaseAggressionPenalty"]
+        fertilityPenalty = configs["diseaseFertilityPenalty"]
+        movementPenalty = configs["diseaseMovementPenalty"]
+        spiceMetabolismPenalty = configs["diseaseSpiceMetabolismPenalty"]
+        sugarMetabolismPenalty = configs["diseaseSugarMetabolismPenalty"]
+        tagLengths = configs["diseaseTagStringLength"]
+        visionPenalty = configs["diseaseVisionPenalty"]
+
+        minAggressionPenalty = aggressionPenalty[0]
+        minFertilityPenalty = fertilityPenalty[0]
+        minMovementPenalty = movementPenalty[0]
+        minSpiceMetabolismPenalty = spiceMetabolismPenalty[0]
+        minSugarMetabolismPenalty = sugarMetabolismPenalty[0]
+        minTagLength = tagLengths[0]
+        minVisionPenalty = visionPenalty[0]
+
+        maxAggressionPenalty = aggressionPenalty[1]
+        maxFertilityPenalty = fertilityPenalty[1]
+        maxMovementPenalty = movementPenalty[1]
+        maxSpiceMetabolismPenalty = spiceMetabolismPenalty[1]
+        maxSugarMetabolismPenalty = sugarMetabolismPenalty[1]
+        maxTagLength = tagLengths[1]
+        maxVisionPenalty = visionPenalty[1]
+
+        aggressionPenalties = []
+        diseaseTags = []
+        endowments = []
+        fertilityPenalties = []
+        movementPenalties = []
+        spiceMetabolismPenalties = []
+        sugarMetabolismPenalties = []
+        visionPenalties = []
+
+        currAggressionPenalty = minAggressionPenalty
+        currFertilityPenalty = minFertilityPenalty
+        currMovementPenalty = minMovementPenalty
+        currSugarMetabolismPenalty = minSugarMetabolismPenalty
+        currSpiceMetabolismPenalty = minSpiceMetabolismPenalty
+        currTagLength = minTagLength
+        currVisionPenalty = minVisionPenalty
+
+        for i in range(numDiseases):
+            aggressionPenalties.append(currAggressionPenalty)
+            diseaseTags.append([random.randrange(2) for i in range(currTagLength)])
+            fertilityPenalties.append(currFertilityPenalty)
+            movementPenalties.append(currMovementPenalty)
+            spiceMetabolismPenalties.append(currSpiceMetabolismPenalty)
+            sugarMetabolismPenalties.append(currSugarMetabolismPenalty)
+            visionPenalties.append(currVisionPenalty)
+
+            currAggressionPenalty += 1
+            currFertilityPenalty += 1
+            currMovementPenalty += 1
+            currSpiceMetabolismPenalty += 1
+            currSugarMetabolismPenalty += 1
+            currTagLength += 1
+            currVisionPenalty += 1
+
+            if currAggressionPenalty > maxAggressionPenalty:
+                currAggressionPenalty = minAggressionPenalty
+            if currFertilityPenalty > maxFertilityPenalty:
+                currFertilityPenalty = minFertilityPenalty
+            if currMovementPenalty > maxMovementPenalty:
+                currMovementPenalty = minMovementPenalty
+            if currSpiceMetabolismPenalty > maxSpiceMetabolismPenalty:
+                currSpiceMetabolismPenalty = minSpiceMetabolismPenalty
+            if currSugarMetabolismPenalty > maxSugarMetabolismPenalty:
+                currSugarMetabolismPenalty = minSugarMetabolismPenalty
+            if currTagLength > maxTagLength:
+                currTagLength = minTagLength
+            if currVisionPenalty > maxVisionPenalty:
+                currVisionPenalty = minVisionPenalty
+
+        randomDiseaseEndowment = {"aggressionPenalties": aggressionPenalties,
+                     "diseaseTags": diseaseTags,
+                     "fertilityPenalties": fertilityPenalties,
+                     "movementPenalties": movementPenalties,
+                     "spiceMetabolismPenalties": spiceMetabolismPenalties,
+                     "sugarMetabolismPenalties": sugarMetabolismPenalties,
+                     "visionPenalties": visionPenalties}
+
+        # Map configuration to a random number via hash to make random number generation independent of iteration order
+        if (self.diseaseConfigHashes == None):
+            self.diseaseConfigHashes = {}
+            for penalty in randomDiseaseEndowment:
+                hashed = hashlib.md5(penalty.encode())
+                self.diseaseConfigHashes[penalty] = int(hashed.hexdigest(), 16)
+
+        # Keep state of random numbers to allow extending agent endowments without altering original random object state
+        randomNumberReset = random.getstate()
+        for endowment in randomDiseaseEndowment.keys():
+            random.seed(self.diseaseConfigHashes[endowment] + self.timestep)
+            random.shuffle(randomDiseaseEndowment[endowment])
+        random.setstate(randomNumberReset)
+
+        for i in range(numDiseases):
+            diseaseEndowment = {"aggressionPenalty": aggressionPenalties.pop(),
+                                "fertilityPenalty": fertilityPenalties.pop(),
+                                "movementPenalty": movementPenalties.pop(),
+                                "spiceMetabolismPenalty": spiceMetabolismPenalties.pop(),
+                                "sugarMetabolismPenalty": sugarMetabolismPenalties.pop(),
+                                "tags": diseaseTags.pop(),
+                                "visionPenalty": visionPenalties.pop()}
+            endowments.append(diseaseEndowment)
+        return endowments
+
+    def randomizeAgentEndowments(self, numAgents):
+        configs = self.configuration
+        aggressionFactor = configs["agentAggressionFactor"]
+        baseInterestRate = configs["agentBaseInterestRate"]
+        decisionModelFactor = configs["agentDecisionModelFactor"]
+        decisionModelLookaheadDiscount = configs["agentDecisionModelLookaheadDiscount"]
+        decisionModelLookaheadFactor = configs["agentDecisionModelLookaheadFactor"]
+        decisionModelTribalFactor = configs["agentDecisionModelTribalFactor"]
+        femaleFertilityAge = configs["agentFemaleFertilityAge"]
+        femaleInfertilityAge = configs["agentFemaleInfertilityAge"]
+        fertilityFactor = configs["agentFertilityFactor"]
+        immuneSystemLength = configs["agentImmuneSystemLength"]
+        inheritancePolicy = configs["agentInheritancePolicy"]
+        lendingFactor = configs["agentLendingFactor"]
+        loanDuration = configs["agentLoanDuration"]
+        lookaheadFactor = configs["agentLookaheadFactor"]
+        maleFertilityAge = configs["agentMaleFertilityAge"]
+        maleInfertilityAge = configs["agentMaleInfertilityAge"]
+        maleToFemaleRatio = configs["agentMaleToFemaleRatio"]
+        maxAge = configs["agentMaxAge"]
+        maxFriends = configs["agentMaxFriends"]
+        movement = configs["agentMovement"]
+        movementMode = configs["agentMovementMode"]
+        neighborhoodMode = configs["neighborhoodMode"]
+        selfishnessFactor = configs["agentSelfishnessFactor"]
+        spiceMetabolism = configs["agentSpiceMetabolism"]
+        startingSpice = configs["agentStartingSpice"]
+        startingSugar = configs["agentStartingSugar"]
+        sugarMetabolism = configs["agentSugarMetabolism"]
+        tagPreferences = configs["agentTagPreferences"]
+        tagging = configs["agentTagging"]
+        tradeFactor = configs["agentTradeFactor"]
+        tagging = configs["agentTagging"]
+        universalSpice = configs["agentUniversalSpice"]
+        universalSugar = configs["agentUniversalSugar"]
+        vision = configs["agentVision"]
+        visionMode = configs["agentVisionMode"]
+
+        numDepressedAgents = int(math.ceil(numAgents * configs["agentDepressionPercentage"]))
+        depressionFactors = [1 for i in range(numDepressedAgents)] + [0 for i in range(numAgents - numDepressedAgents)]
+        random.shuffle(depressionFactors)
+
+        configurations = {"aggressionFactor": {"endowments": [], "curr": aggressionFactor[0], "min": aggressionFactor[0], "max": aggressionFactor[1]},
+                          "baseInterestRate": {"endowments": [], "curr": baseInterestRate[0], "min": baseInterestRate[0], "max": baseInterestRate[1]},
+                          "decisionModelFactor": {"endowments": [], "curr": decisionModelFactor[0], "min": decisionModelFactor[0], "max": decisionModelFactor[1]},
+                          "decisionModelLookaheadDiscount": {"endowments": [], "curr": decisionModelLookaheadDiscount[0], "min": decisionModelLookaheadDiscount[0], "max": decisionModelLookaheadDiscount[1]},
+                          "decisionModelTribalFactor": {"endowments": [], "curr": decisionModelTribalFactor[0], "min": decisionModelTribalFactor[0], "max": decisionModelTribalFactor[1]},
+                          "femaleFertilityAge": {"endowments": [], "curr": femaleFertilityAge[0], "min": femaleFertilityAge[0], "max": femaleFertilityAge[1]},
+                          "femaleInfertilityAge": {"endowments": [], "curr": femaleInfertilityAge[0], "min": femaleInfertilityAge[0], "max": femaleInfertilityAge[1]},
+                          "fertilityFactor": {"endowments": [], "curr": fertilityFactor[0], "min": fertilityFactor[0], "max": fertilityFactor[1]},
+                          "lendingFactor": {"endowments": [], "curr": lendingFactor[0], "min": lendingFactor[0], "max": lendingFactor[1]},
+                          "loanDuration": {"endowments": [], "curr": loanDuration[0], "min": loanDuration[0], "max": loanDuration[1]},
+                          "lookaheadFactor": {"endowments": [], "curr": lookaheadFactor[0], "min": lookaheadFactor[0], "max": lookaheadFactor[1]},
+                          "maleFertilityAge": {"endowments": [], "curr": maleFertilityAge[0], "min": maleFertilityAge[0], "max": maleFertilityAge[1]},
+                          "maleInfertilityAge": {"endowments": [], "curr": maleInfertilityAge[0], "min": maleInfertilityAge[0], "max": maleInfertilityAge[1]},
+                          "maxAge": {"endowments": [], "curr": maxAge[0], "min": maxAge[0], "max": maxAge[1]},
+                          "maxFriends": {"endowments": [], "curr": maxFriends[0], "min": maxFriends[0], "max": maxFriends[1]},
+                          "movement": {"endowments": [], "curr": movement[0], "min": movement[0], "max": movement[1]},
+                          "selfishnessFactor": {"endowments": [], "curr": selfishnessFactor[0], "min": selfishnessFactor[0], "max": selfishnessFactor[1]},
+                          "spice": {"endowments": [], "curr": startingSpice[0], "min": startingSpice[0], "max": startingSpice[1]},
+                          "spiceMetabolism": {"endowments": [], "curr": spiceMetabolism[0], "min": spiceMetabolism[0], "max": spiceMetabolism[1]},
+                          "sugar": {"endowments": [], "curr": startingSugar[0], "min": startingSugar[0], "max": startingSugar[1]},
+                          "sugarMetabolism": {"endowments": [], "curr": sugarMetabolism[0], "min": sugarMetabolism[0], "max": sugarMetabolism[1]},
+                          "tradeFactor": {"endowments": [], "curr": tradeFactor[0], "min": tradeFactor[0], "max": tradeFactor[1]},
+                          "universalSpice": {"endowments": [], "curr": universalSpice[0], "min": universalSpice[0], "max": universalSugar[1]},
+                          "universalSugar": {"endowments": [], "curr": universalSugar[0], "min": universalSugar[0], "max": universalSugar[1]},
+                          "vision": {"endowments": [], "curr": vision[0], "min": vision[0], "max": vision[1]}
+                          }
+
+        if self.agentConfigHashes == None:
+            self.agentConfigHashes = {}
+            # Map configuration to a random number via hash to make random number generation independent of iteration order
+            for config in configurations.keys():
+                hashed = hashlib.md5(config.encode())
+                hashNum = int(hashed.hexdigest(), 16)
+                self.agentConfigHashes[config] = hashNum
+
+        for config in configurations:
+            configMin = configurations[config]["min"]
+            configMax = configurations[config]["max"]
+            configMinDecimals = str(configMin).split('.')
+            configMaxDecimals = str(configMax).split('.')
+            decimalRange = []
+            if len(configMinDecimals) == 2:
+                configMinDecimals = len(configMinDecimals[1])
+                decimalRange.append(configMinDecimals)
+            if len(configMaxDecimals) == 2:
+                configMaxDecimals = len(configMaxDecimals[1])
+                decimalRange.append(configMaxDecimals)
+            # If no fractional component to configuration item, assume increment of 1
+            decimals = max(decimalRange) if len(decimalRange) > 0 else 0
+            increment = 10 ** (-1 * decimals)
+            configurations[config]["inc"] = increment
+            configurations[config]["decimals"] = decimals
+
+        decisionModels = []
+        endowments = []
+        immuneSystems = []
+        sexes = []
+        tags = self.generateAgentTags(numAgents)
+
+        sexDistributionCountdown = numAgents
+        # Determine count of male agents and set as switch for agent generation
+        if maleToFemaleRatio != None and maleToFemaleRatio != 0:
+            sexDistributionCountdown = math.floor(sexDistributionCountdown / (maleToFemaleRatio + 1)) * maleToFemaleRatio
+
+        for i in range(numAgents):
+            for config in configurations.values():
+                config["endowments"].append(config["curr"])
+                config["curr"] += config["inc"]
+                config["curr"] = round(config["curr"], config["decimals"])
+                if config["curr"] > config["max"]:
+                    config["curr"] = config["min"]
+
+            if immuneSystemLength > 0:
+                immuneSystems.append([random.randrange(2) for i in range(immuneSystemLength)])
+            else:
+                immuneSystems.append(None)
+
+            if maleToFemaleRatio != None and maleToFemaleRatio != 0:
+                if sexDistributionCountdown == 0:
+                    sexes.append("female")
+                else:
+                    sexes.append("male")
+                    sexDistributionCountdown -= 1
+            else:
+                sexes.append(None)
+            decisionModel = configs["agentDecisionModels"][i % len(configs["agentDecisionModels"])]
+            # Convert clever name for default behavior
+            if decisionModel == "rawSugarscape":
+                decisionModel = "none"
+            decisionModels.append(decisionModel)
+
+        # Keep state of random numbers to allow extending agent endowments without altering original random object state
+        randomNumberReset = random.getstate()
+        for config in configurations:
+            random.seed(self.agentConfigHashes[config] + self.timestep)
+            random.shuffle(configurations[config]["endowments"])
+        random.setstate(randomNumberReset)
+        random.shuffle(sexes)
+        random.shuffle(decisionModels)
+        for i in range(numAgents):
+            agentEndowment = {"seed": self.seed, "sex": sexes[i], "tags": tags.pop(), "tagPreferences": tagPreferences, "tagging": tagging,
+                              "immuneSystem": immuneSystems.pop(), "inheritancePolicy": inheritancePolicy,
+                              "decisionModel": decisionModels.pop(), "decisionModelLookaheadFactor": decisionModelLookaheadFactor,
+                              "movementMode": movementMode, "neighborhoodMode": neighborhoodMode, "visionMode": visionMode,
+                              "depressionFactor": depressionFactors[i]}
+            for config in configurations:
+                # If sexes are enabled, ensure proper fertility and infertility ages are set
+                if sexes[i] == "female" and config == "femaleFertilityAge":
+                    agentEndowment["fertilityAge"] = configurations["femaleFertilityAge"]["endowments"].pop()
+                elif sexes[i] == "female" and config == "femaleInfertilityAge":
+                    agentEndowment["infertilityAge"] = configurations["femaleInfertilityAge"]["endowments"].pop()
+                elif sexes[i] == "male" and config == "maleFertilityAge":
+                    agentEndowment["fertilityAge"] = configurations["maleFertilityAge"]["endowments"].pop()
+                elif sexes[i] == "male" and config == "maleInfertilityAge":
+                    agentEndowment["infertilityAge"] = configurations["maleInfertilityAge"]["endowments"].pop()
+                elif sexes[i] == None and (config == "femaleInfertilityAge" or config == "femaleFertilityAge" or
+                                           config == "maleInfertilityAge" or config == "maleFertilityAge"):
+                    continue
+                else:
+                    agentEndowment[config] = configurations[config]["endowments"].pop()
+
+            if sexes[i] == None:
+                agentEndowment["fertilityAge"] = 0
+                agentEndowment["infertilityAge"] = 0
+            endowments.append(agentEndowment)
+        return endowments
 
     def randomizeDiseaseEndowments(self, numDiseases):
         configs = self.configuration
@@ -464,176 +747,8 @@ class Sugarscape:
             endowments.append(diseaseEndowment)
         return endowments
 
-    def randomizeAgentEndowments(self, numAgents):
-        configs = self.configuration
-        spiceMetabolism = configs["agentSpiceMetabolism"]
-        sugarMetabolism = configs["agentSugarMetabolism"]
-        movement = configs["agentMovement"]
-        vision = configs["agentVision"]
-        startingSugar = configs["agentStartingSugar"]
-        startingSpice = configs["agentStartingSpice"]
-        maxAge = configs["agentMaxAge"]
-        maleToFemaleRatio = configs["agentMaleToFemaleRatio"]
-        femaleFertilityAge = configs["agentFemaleFertilityAge"]
-        maleFertilityAge = configs["agentMaleFertilityAge"]
-        femaleInfertilityAge = configs["agentFemaleInfertilityAge"]
-        maleInfertilityAge = configs["agentMaleInfertilityAge"]
-        tagPreferences = configs["agentTagPreferences"]
-        tagging = configs["agentTagging"]
-        immuneSystemLength = configs["agentImmuneSystemLength"]
-        aggressionFactor = configs["agentAggressionFactor"]
-        tradeFactor = configs["agentTradeFactor"]
-        decisionModelLookaheadDiscount = configs["agentDecisionModelLookaheadDiscount"]
-        decisionModelLookaheadFactor = configs["agentDecisionModelLookaheadFactor"]
-        lookaheadFactor = configs["agentLookaheadFactor"]
-        lendingFactor = configs["agentLendingFactor"]
-        fertilityFactor = configs["agentFertilityFactor"]
-        loanDuration = configs["agentLoanDuration"]
-        baseInterestRate = configs["agentBaseInterestRate"]
-        maxFriends = configs["agentMaxFriends"]
-        inheritancePolicy = configs["agentInheritancePolicy"]
-        decisionModelFactor = configs["agentDecisionModelFactor"]
-        decisionModelTribalFactor = configs["agentDecisionModelTribalFactor"]
-        selfishnessFactor = configs["agentSelfishnessFactor"]
-        universalSpice = configs["agentUniversalSpice"]
-        universalSugar = configs["agentUniversalSugar"]
-        movementMode = configs["agentMovementMode"]
-        neighborhoodMode = configs["neighborhoodMode"]
-        visionMode = configs["agentVisionMode"]
-        depressionAssignment = configs["agentDepressionAssignment"]
-
-
-        configurations = {"aggressionFactor": {"endowments": [], "curr": aggressionFactor[0], "min": aggressionFactor[0], "max": aggressionFactor[1]},
-                          "baseInterestRate": {"endowments": [], "curr": baseInterestRate[0], "min": baseInterestRate[0], "max": baseInterestRate[1]},
-                          "decisionModelFactor": {"endowments": [], "curr": decisionModelFactor[0], "min": decisionModelFactor[0], "max": decisionModelFactor[1]},
-                          "decisionModelTribalFactor": {"endowments": [], "curr": decisionModelTribalFactor[0], "min": decisionModelTribalFactor[0], "max": decisionModelTribalFactor[1]},
-                          "selfishnessFactor": {"endowments": [], "curr": selfishnessFactor[0], "min": selfishnessFactor[0], "max": selfishnessFactor[1]},
-                          "femaleInfertilityAge": {"endowments": [], "curr": femaleInfertilityAge[0], "min": femaleInfertilityAge[0], "max": femaleInfertilityAge[1]},
-                          "femaleFertilityAge": {"endowments": [], "curr": femaleFertilityAge[0], "min": femaleFertilityAge[0], "max": femaleFertilityAge[1]},
-                          "fertilityFactor": {"endowments": [], "curr": fertilityFactor[0], "min": fertilityFactor[0], "max": fertilityFactor[1]},
-                          "lendingFactor": {"endowments": [], "curr": lendingFactor[0], "min": lendingFactor[0], "max": lendingFactor[1]},
-                          "loanDuration": {"endowments": [], "curr": loanDuration[0], "min": loanDuration[0], "max": loanDuration[1]},
-                          "decisionModelLookaheadDiscount": {"endowments": [], "curr": decisionModelLookaheadDiscount[0], "min": decisionModelLookaheadDiscount[0], "max": decisionModelLookaheadDiscount[1]},
-                          "lookaheadFactor": {"endowments": [], "curr": lookaheadFactor[0], "min": lookaheadFactor[0], "max": lookaheadFactor[1]},
-                          "maleInfertilityAge": {"endowments": [], "curr": maleInfertilityAge[0], "min": maleInfertilityAge[0], "max": maleInfertilityAge[1]},
-                          "maleFertilityAge": {"endowments": [], "curr": maleFertilityAge[0], "min": maleFertilityAge[0], "max": maleFertilityAge[1]},
-                          "maxAge": {"endowments": [], "curr": maxAge[0], "min": maxAge[0], "max": maxAge[1]},
-                          "maxFriends": {"endowments": [], "curr": maxFriends[0], "min": maxFriends[0], "max": maxFriends[1]},
-                          "movement": {"endowments": [], "curr": movement[0], "min": movement[0], "max": movement[1]},
-                          "spice": {"endowments": [], "curr": startingSpice[0], "min": startingSpice[0], "max": startingSpice[1]},
-                          "spiceMetabolism": {"endowments": [], "curr": spiceMetabolism[0], "min": spiceMetabolism[0], "max": spiceMetabolism[1]},
-                          "sugar": {"endowments": [], "curr": startingSugar[0], "min": startingSugar[0], "max": startingSugar[1]},
-                          "sugarMetabolism": {"endowments": [], "curr": sugarMetabolism[0], "min": sugarMetabolism[0], "max": sugarMetabolism[1]},
-                          "tradeFactor": {"endowments": [], "curr": tradeFactor[0], "min": tradeFactor[0], "max": tradeFactor[1]},
-                          "vision": {"endowments": [], "curr": vision[0], "min": vision[0], "max": vision[1]},
-                          "universalSpice": {"endowments": [], "curr": universalSpice[0], "min": universalSpice[0], "max": universalSugar[1]},
-                          "universalSugar": {"endowments": [], "curr": universalSugar[0], "min": universalSugar[0], "max": universalSugar[1]},
-                          "depressionAssignment": {"endowments": [], "curr": depressionAssignment[0], "min": depressionAssignment[0], "max": depressionAssignment[1]}
-                          }
-
-        if self.agentConfigHashes == None:
-            self.agentConfigHashes = {}
-            # Map configuration to a random number via hash to make random number generation independent of iteration order
-            for config in configurations.keys():
-                hashed = hashlib.md5(config.encode())
-                hashNum = int(hashed.hexdigest(), 16)
-                self.agentConfigHashes[config] = hashNum
-
-        for config in configurations:
-            configMin = configurations[config]["min"]
-            configMax = configurations[config]["max"]
-            configMinDecimals = str(configMin).split('.')
-            configMaxDecimals = str(configMax).split('.')
-            decimalRange = []
-            if len(configMinDecimals) == 2:
-                configMinDecimals = len(configMinDecimals[1])
-                decimalRange.append(configMinDecimals)
-            if len(configMaxDecimals) == 2:
-                configMaxDecimals = len(configMaxDecimals[1])
-                decimalRange.append(configMaxDecimals)
-            # If no fractional component to configuration item, assume increment of 1
-            decimals = max(decimalRange) if len(decimalRange) > 0 else 0
-            increment = 10 ** (-1 * decimals)
-            configurations[config]["inc"] = increment
-            configurations[config]["decimals"] = decimals
-
-        endowments = []
-        sexes = []
-        tags = self.generateAgentTags(numAgents)
-        immuneSystems = []
-        decisionModels = []
-
-        sexDistributionCountdown = numAgents
-        # Determine count of male agents and set as switch for agent generation
-        if maleToFemaleRatio != None and maleToFemaleRatio != 0:
-            sexDistributionCountdown = math.floor(sexDistributionCountdown / (maleToFemaleRatio + 1)) * maleToFemaleRatio
-
-        for i in range(numAgents):
-            for config in configurations.values():
-                config["endowments"].append(config["curr"])
-                config["curr"] += config["inc"]
-                config["curr"] = round(config["curr"], config["decimals"])
-                if config["curr"] > config["max"]:
-                    config["curr"] = config["min"]
-
-            if immuneSystemLength > 0:
-                immuneSystems.append([random.randrange(2) for i in range(immuneSystemLength)])
-            else:
-                immuneSystems.append(None)
-
-            if maleToFemaleRatio != None and maleToFemaleRatio != 0:
-                if sexDistributionCountdown == 0:
-                    sexes.append("female")
-                else:
-                    sexes.append("male")
-                    sexDistributionCountdown -= 1
-            else:
-                sexes.append(None)
-            decisionModel = configs["agentDecisionModels"][i % len(configs["agentDecisionModels"])]
-            # Convert clever name for default behavior
-            if decisionModel == "rawSugarscape":
-                decisionModel = "none"
-            decisionModels.append(decisionModel)
-
-        # Keep state of random numbers to allow extending agent endowments without altering original random object state
-        randomNumberReset = random.getstate()
-        for config in configurations:
-            random.seed(self.agentConfigHashes[config] + self.timestep)
-            random.shuffle(configurations[config]["endowments"])
-        random.setstate(randomNumberReset)
-        random.shuffle(sexes)
-        random.shuffle(decisionModels)
-        for i in range(numAgents):
-            agentEndowment = {"seed": self.seed, "sex": sexes[i], "tags": tags.pop(), "tagPreferences": tagPreferences, "tagging": tagging,
-                              "immuneSystem": immuneSystems.pop(), "inheritancePolicy": inheritancePolicy,
-                              "decisionModel": decisionModels.pop(), "decisionModelLookaheadFactor": decisionModelLookaheadFactor,
-                              "movementMode": movementMode, "neighborhoodMode": neighborhoodMode, "visionMode": visionMode}
-            for config in configurations:
-                # If sexes are enabled, ensure proper fertility and infertility ages are set
-                if sexes[i] == "female" and config == "femaleFertilityAge":
-                    agentEndowment["fertilityAge"] = configurations["femaleFertilityAge"]["endowments"].pop()
-                elif sexes[i] == "female" and config == "femaleInfertilityAge":
-                    agentEndowment["infertilityAge"] = configurations["femaleInfertilityAge"]["endowments"].pop()
-                elif sexes[i] == "male" and config == "maleFertilityAge":
-                    agentEndowment["fertilityAge"] = configurations["maleFertilityAge"]["endowments"].pop()
-                elif sexes[i] == "male" and config == "maleInfertilityAge":
-                    agentEndowment["infertilityAge"] = configurations["maleInfertilityAge"]["endowments"].pop()
-                elif sexes[i] == None and (config == "femaleInfertilityAge" or config == "femaleFertilityAge" or
-                                           config == "maleInfertilityAge" or config == "maleFertilityAge"):
-                    continue
-                else:
-                    agentEndowment[config] = configurations[config]["endowments"].pop()
-
-            if sexes[i] == None:
-                agentEndowment["fertilityAge"] = 0
-                agentEndowment["infertilityAge"] = 0
-            endowments.append(agentEndowment)
-        return endowments
-
     def removeDeadAgents(self):
         deadAgents = []
-        deadAgentsDep = []
-        deadAgentsNorm = []
         for agent in self.agents:
             if agent.isAlive() == False:
                 deadAgents.append(agent)
@@ -642,13 +757,6 @@ class Sugarscape:
         self.deadAgents += deadAgents
         for agent in deadAgents:
             self.agents.remove(agent)
-        for agent in deadAgents:
-            if agent.depressed == True:
-                self.deadAgentsDep.append(agent)
-                self.deadAgentsDep += deadAgentsDep
-            else:
-                self.deadAgentsNorm.append(agent)
-                self.deadAgentsNorm += deadAgentsNorm
 
     def replaceDeadAgents(self):
         numAgents = len(self.agents)
@@ -671,7 +779,7 @@ class Sugarscape:
             if len(self.agents) == 0 and self.keepAlive == False:
                 break
             if self.configuration["screenshots"] == True and self.configuration["headlessMode"] == False:
-                self.gui.canvas.postscript(file="screenshot{screenshots}.ps", colormode="color")
+                self.gui.canvas.postscript(file=f"screenshot{screenshots}.ps", colormode="color")
                 screenshots += 1
             self.doTimestep()
             t += 1
@@ -687,9 +795,9 @@ class Sugarscape:
             # Ensure consistent ordering for CSV format
             for stat in sorted(self.runtimeStats):
                 if header == "":
-                    header += "{stat}"
+                    header += f"{stat}"
                 else:
-                    header += ",{stat}"
+                    header += f",{stat}"
             header += "\n"
             self.log.write(header)
         else:
@@ -704,6 +812,8 @@ class Sugarscape:
         self.run = not self.run
 
     def updateGiniCoefficient(self):
+        if len(self.agents) == 0:
+            return 0
         agentWealths = sorted([agent.sugar + agent.spice for agent in self.agents])
         # Calculate normalized area of Lorenz curve of agent wealths
         numAgents = len(agentWealths)
@@ -733,26 +843,26 @@ class Sugarscape:
             for agent in self.agents:
                 ageBins[math.floor(agent.age / (maxAge + 1) * histogramBins)] += 1
 
-        maxSugar = 0
         maxSpice = 0
+        maxSugar = 0
         maxWealth = 0
         for agent in self.agents:
-            if agent.sugar > maxSugar:
-                maxSugar = agent.sugar
             if agent.spice > maxSpice:
                 maxSpice = agent.spice
+            if agent.sugar > maxSugar:
+                maxSugar = agent.sugar
             if agent.sugar + agent.spice > maxWealth:
                 maxWealth = agent.sugar + agent.spice
-        self.graphStats["maxSugar"] = maxSugar
         self.graphStats["maxSpice"] = maxSpice
+        self.graphStats["maxSugar"] = maxSugar
         self.graphStats["maxWealth"] = maxWealth
 
         sugarBins = [0] * histogramBins
         spiceBins = [0] * histogramBins
         agentWealths = []
         for agent in self.agents:
-            sugarBins[math.floor(agent.sugar / (maxSugar + 1) * histogramBins)] += 1
             spiceBins[math.floor(agent.spice / (maxSpice + 1) * histogramBins)] += 1
+            sugarBins[math.floor(agent.sugar / (maxSugar + 1) * histogramBins)] += 1
             agentWealths.append(agent.sugar + agent.spice)
 
         meanTribeTags = [0] * self.configuration["agentTagStringLength"]
@@ -777,53 +887,47 @@ class Sugarscape:
             lorenzCurvePoints = [(0, 0), (1, 1)]
 
         self.graphStats["ageBins"] = ageBins
-        self.graphStats["sugarBins"] = sugarBins
-        self.graphStats["spiceBins"] = spiceBins
         self.graphStats["lorenzCurvePoints"] = lorenzCurvePoints
         self.graphStats["meanTribeTags"] = meanTribeTags
+        self.graphStats["spiceBins"] = spiceBins
+        self.graphStats["sugarBins"] = sugarBins
 
     def updateRuntimeStats(self):
-        self.agentsDep = []
-        self.agentsNorm = []
-        for agent in self.agents:
-            if agent.depressed == True:
-                self.agentsDep.append(agent)
-                self.agentsDepTotal.append(agent)
-            else:
-                self.agentsNorm.append(agent)
-                self.agentsNormTotal.append(agent)
-        numAgents = len(self.agents)
-        numAgentsDep = len(self.agentsDep)
-        numAgentsNorm = len(self.agentsNorm)
-        meanSugarMetabolism = 0
-        meanSpiceMetabolism = 0
-        meanMetabolism = 0
-        meanMovement = 0
-        meanVision = 0
-        meanWealth = 0
-        meanWealthDep = 0
-        meanWealthNorm = 0
-        meanAge = 0
-        meanTradePrice = 0
-        tradeVolume = 0
+        # Log separate stats for experimental and control groups
+        if self.experimentalGroup != None:
+            self.updateRuntimeStatsPerGroup(self.experimentalGroup)
+            self.updateRuntimeStatsPerGroup(self.experimentalGroup, True)
+        self.updateRuntimeStatsPerGroup()
+
+    def updateRuntimeStatsPerGroup(self, group=None, notInGroup=False):
+        maxTribe = 0
+        maxTribeSize = 0
         maxWealth = 0
-        minWealth = sys.maxsize
+        meanAge = 0
+        meanConflictHappiness = 0
+        meanFamilyHappiness = 0
         meanHappiness = 0
         meanHealthHappiness = 0
-        meanWealthHappiness = 0
+        meanMetabolism = 0
+        meanMovement = 0
         meanSocialHappiness = 0
-        meanFamilyHappiness = 0
-        meanConflictHappiness = 0
+        meanSpiceMetabolism = 0
+        meanSugarMetabolism = 0
+        meanTradePrice = 0
+        meanVision = 0
+        meanWealth = 0
+        meanWealthHappiness = 0
+        minWealth = sys.maxsize
+        numAgents = 0
         numTraders = 0
-        totalWealthLost = 0
-        totalMetabolismCost = 0
-        totalSickAgents = 0
-        popDep = numAgentsDep
-        popNorm = numAgentsNorm
-        maxPopDep = len(self.agentsDepTotal)
-        maxPopNorm = len(self.agentsNormTotal)
-        numDeathDep = 0
-        numDeathNorm = 0
+        numTribes = 0
+        sickAgents = 0
+        tradeVolume = 0
+        c1, c2, c3, c4, t1, t2, t3, t4, l1, l2, l3, l4, r1, r2, r3, r4, d1, d2, d3, d4 = [0] * 20
+        carryingCapacityWeight = 0.05
+        carryingCapacity = math.ceil((carryingCapacityWeight * len(self.agents)) + ((1 - carryingCapacityWeight) * self.runtimeStats["carryingCapacity"]))
+        if self.timestep == 0:
+            carryingCapacity = len(self.agents)
 
         environmentWealthCreated = 0
         environmentWealthTotal = 0
@@ -834,33 +938,26 @@ class Sugarscape:
                 if self.timestep == 1:
                     environmentWealthCreated += self.environment.grid[i][j].maxSugar + self.environment.grid[i][j].maxSpice
 
+        agentAgingDeaths = 0
+        agentCombatDeaths = 0
+        agentDiseaseDeaths = 0
+        agentMeanTimeToLive = 0
+        agentStarvationDeaths = 0
+        agentTotalMetabolism = 0
+        agentWealthBurnRate = 0
         agentWealthCollected = 0
         agentWealthTotal = 0
-        agentStarvationDeaths = 0
-        agentDiseaseDeaths = 0
-        agentCombatDeaths = 0
-        agentAgingDeaths = 0
-        agentWealthBurnRate = 0
-        agentMeanTimeToLive = 0
-        agentTotalMetabolism = 0
 
-        agentWealthCollectedDep = 0 
-        agentWealthTotalDep = 0
-        totalWealthLostDep = 0
-        agentStarvationDeathsDep = 0
-        agentDiseaseDeathsDep = 0
-        agentCombatDeathsDep = 0
-        agentAgingDeathsDep = 0
+        meanDeathsPercentage = 0
+        sickAgentsPercentage = 0
 
-        agentWealthCollectedNorm = 0
-        agentWealthTotalNorm = 0 
-        totalWealthLostNorm = 0
-        agentStarvationDeathsNorm = 0 
-        agentDiseaseDeathsNorm = 0 
-        agentCombatDeathsNorm = 0 
-        agentAgingDeathsNorm = 0
+        agentsBorn = 0
+        agentsReplaced = 0
+        tribes = {}
 
         for agent in self.agents:
+            if group != None and agent.isInGroup(group, notInGroup) == False:
+                continue
             agentTimeToLive = agent.findTimeToLive()
             agentTimeToLiveAgeLimited = agent.findTimeToLive(True)
             agentWealth = agent.sugar + agent.spice
@@ -876,6 +973,31 @@ class Sugarscape:
             meanFamilyHappiness += agent.familyHappiness
             meanSocialHappiness += agent.socialHappiness
             meanConflictHappiness += agent.conflictHappiness
+            c1 += agent.c1
+            c2 += agent.c2
+            c3 += agent.c3
+            c4 += agent.c4
+            agent.c1, agent.c2, agent.c3, agent.c4 = 0, 0, 0, 0
+            t1 += agent.t1
+            t2 += agent.t2
+            t3 += agent.t3
+            t4 += agent.t4
+            agent.t1, agent.t2, agent.t3, agent.t4 = 0, 0, 0, 0 
+            l1 += agent.l1
+            l2 += agent.l2
+            l3 += agent.l3
+            l4 += agent.l4
+            agent.l1, agent. l2, agent. l3, agent.l4 = 0, 0, 0, 0
+            r1 += agent.r1
+            r2 += agent.r2
+            r3 += agent.r3
+            r4 += agent.r4
+            agent.r1, agent.r2, agent.r3, agent.r4 = 0, 0, 0, 0
+            d1 += agent.d1
+            d2 += agent.d2
+            d3 += agent.d3
+            d4 += agent.d4
+            agent.d1, agent.d2, agent.d3, agent.d4 = 0, 0, 0, 0
             if agent.tradeVolume > 0:
                 meanTradePrice += max(agent.spicePrice, agent.sugarPrice)
                 tradeVolume += agent.tradeVolume
@@ -885,191 +1007,124 @@ class Sugarscape:
             agentWealthBurnRate += agentTimeToLive
             agentMeanTimeToLive += agentTimeToLiveAgeLimited
             agentTotalMetabolism += agent.sugarMetabolism + agent.spiceMetabolism
-
             if agent.isSick():
-                totalSickAgents += 1
-
+                sickAgents += 1
             if agentWealth < minWealth:
                 minWealth = agentWealth
             if agentWealth > maxWealth:
                 maxWealth = agentWealth
-            totalMetabolismCost += agent.sugarMetabolism + agent.spiceMetabolism
+            if agent.tribe not in tribes:
+                tribes[agent.tribe] = 1
+            else:
+                tribes[agent.tribe] += 1
+            numAgents += 1
 
-        for agent in self.agentsDep:
-            meanWealthDep += agent.wealth
-            agentWealthTotalDep += agent.wealth
-        for agent in self.agentsNorm:
-            meanWealthNorm += agent.wealth
-            agentWealthTotalNorm += agent.wealth
+        numDeadAgents = 0
+        meanAgeAtDeath = 0
+        for agent in self.deadAgents:
+            if group != None and agent.isInGroup(group, notInGroup) == False:
+                continue
+            agentWealth = agent.sugar + agent.spice
+            meanAgeAtDeath += agent.age
+            agentWealthCollected += agentWealth - (agent.lastSugar + agent.lastSpice)
+            agentAgingDeaths += 1 if agent.causeOfDeath == "aging" else 0
+            agentCombatDeaths += 1 if agent.causeOfDeath == "combat" else 0
+            agentDiseaseDeaths += 1 if agent.causeOfDeath == "disease" else 0
+            agentStarvationDeaths += 1 if agent.causeOfDeath == "starvation" else 0
+            numDeadAgents += 1
+        meanAgeAtDeath = round(meanAgeAtDeath / numDeadAgents, 2) if numDeadAgents > 0 else 0
 
         if numAgents > 0:
+            agentMeanTimeToLive = round(agentMeanTimeToLive / numAgents, 2)
+            agentWealthBurnRate = round(agentWealthBurnRate / numAgents, 2)
+            agentWealthTotal = round(agentWealthTotal, 2)
+            maxTribe = max(tribes, key=tribes.get)
+            maxTribeSize = tribes[maxTribe]
+            maxWealth = round(maxWealth, 2)
+            meanAge = round(meanAge / numAgents, 2)
+            meanConflictHappiness = round(meanConflictHappiness / numAgents, 2)
+            meanFamilyHappiness = round(meanFamilyHappiness / numAgents, 2)
+            meanHappiness = round(meanHappiness / numAgents, 2)
+            meanHealthHappiness = round(meanHealthHappiness / numAgents, 2)
             combinedMetabolism = meanSugarMetabolism + meanSpiceMetabolism
             if meanSugarMetabolism > 0 and meanSpiceMetabolism > 0:
                 combinedMetabolism = round(combinedMetabolism / 2, 2)
             meanMetabolism = round(combinedMetabolism / numAgents, 2)
             meanMovement = round(meanMovement / numAgents, 2)
-            meanVision = round(meanVision / numAgents, 2)
-            meanAge = round(meanAge / numAgents, 2)
-            meanWealth = round(meanWealth / numAgents, 2)
-            meanTradePrice = round(meanTradePrice / numTraders, 2) if numTraders > 0 else 0
-            tradeVolume = round(tradeVolume, 2)
-            agentWealthTotal = round(agentWealthTotal, 2)
-            minWealth = round(minWealth, 2)
-            maxWealth = round(maxWealth, 2)
-            meanHappiness = round(meanHappiness / numAgents, 2)
-            meanWealthHappiness = round(meanWealthHappiness / numAgents, 2)
-            meanHealthHappiness = round(meanHealthHappiness / numAgents, 2)
-            meanFamilyHappiness = round(meanFamilyHappiness / numAgents, 2)
             meanSocialHappiness = round(meanSocialHappiness / numAgents, 2)
-            meanConflictHappiness = round(meanConflictHappiness / numAgents, 2)
-            agentWealthBurnRate = round(agentWealthBurnRate / numAgents, 2)
-            agentMeanTimeToLive = round(agentMeanTimeToLive / numAgents, 2)
+            meanTradePrice = round(meanTradePrice / numTraders, 2) if numTraders > 0 else 0
+            meanVision = round(meanVision / numAgents, 2)
+            meanWealth = round(meanWealth / numAgents, 2)
+            meanWealthHappiness = round(meanWealthHappiness / numAgents, 2)
+            minWealth = round(minWealth, 2)
+            remainingTribes = len(tribes)
+            tradeVolume = round(tradeVolume, 2)
+            meanDeathsPercentage = round(numDeadAgents / numAgents, 2) * 100
+            sickAgentsPercentage = round(sickAgents / numAgents, 2) * 100
         else:
+            agentMeanTimeToLive = 0
+            agentWealthBurnRate = 0
+            maxTribe = 0
+            maxWealth = 0
+            meanAge = 0
+            meanConflictHappiness = 0
+            meanFamilyHappiness = 0
+            meanHappiness = 0
+            meanHealthHappiness = 0
             meanMetabolism = 0
             meanMovement = 0
-            meanVision = 0
-            meanAge = 0
-            meanWealth = 0
-            minWealth = 0
-            maxWealth = 0
-            meanHappiness = 0
-            meanWealthHappiness = 0
-            meanHealthHappiness = 0
-            meanFamilyHappiness = 0
             meanSocialHappiness = 0
-            meanConflictHappiness = 0
+            meanVision = 0
+            meanWealth = 0
+            meanWealthHappiness = 0
+            minWealth = 0
+            remainingTribes = 0
             tradeVolume = 0
-            agentWealthBurnRate = 0
-            agentMeanTimeToLive = 0
-        
-        if len(self.agentsDep) > 0:
-            meanWealthDep = round(meanWealthDep / numAgentsDep, 2)
-            agentWealthTotalDep = round(agentWealthTotalDep, 2)
-        else:
-            meanWealthDep = 0
-        if len(self.agentsNorm) > 0:
-            meanWealthNorm = round(meanWealthNorm / numAgentsNorm, 2)
-            agentWealthTotalNorm = round(agentWealthTotalNorm, 2)
-        else: 
-            meanWealthNorm = 0
 
-        if popNorm > maxPopNorm:
-            maxPopNorm = popNorm
-        if popDep > maxPopDep:
-            maxPopDep = popDep
+        for agent in self.replacedAgents:
+            if group != None and agent.isInGroup(group, notInGroup) == False:
+                continue
+            agentsReplaced += 1
 
-        #Death statistics for all agents
-        numDeadAgents = len(self.deadAgents)
-        meanAgeAtDeath = 0
-        for agent in self.deadAgents:
-            agentWealth = agent.sugar + agent.spice
-            meanAgeAtDeath += agent.age
-            agentWealthCollected += agentWealth - (agent.lastSugar + agent.lastSpice)
-            totalWealthLost += agentWealth
-            agentStarvationDeaths += 1 if agent.causeOfDeath == "starvation" else 0
-            agentDiseaseDeaths += 1 if agent.causeOfDeath == "disease" else 0
-            agentCombatDeaths += 1 if agent.causeOfDeath == "combat" else 0
-            agentAgingDeaths += 1 if agent.causeOfDeath == "aging" else 0
-        meanAgeAtDeath = round(meanAgeAtDeath / numDeadAgents, 2) if numDeadAgents > 0 else 0
-        self.deadAgents = []
-
-        #Death statistics for depressed and non-depressed agents
-        numDeadAgentsDep = len(self.deadAgentsDep)
-        numDeadAgentsNorm = len(self.deadAgentsNorm)
-        meanAgeAtDeathDep = 0
-        meanAgeAtDeathNorm = 0
-
-        for agent in self.deadAgentsDep:
-            meanAgeAtDeathDep += agent.age
-            agentWealthCollectedDep += agent.wealth - (agent.lastSugar + agent.lastSpice)
-            totalWealthLostDep += agent.sugar + agent.spice
-            agentStarvationDeathsDep += 1 if agent.causeOfDeath == "starvation" else 0
-            agentDiseaseDeathsDep += 1 if agent.causeOfDeath == "disease" else 0
-            agentCombatDeathsDep += 1 if agent.causeOfDeath == "combat" else 0
-            agentAgingDeathsDep += 1 if agent.causeOfDeath == "aging" else 0
-        meanAgeAtDeathDep = round(meanAgeAtDeathDep / numDeadAgentsDep, 2) if numDeadAgentsDep > 0 else 0
-        self.deadAgentsDep = []
-
-        for agent in self.deadAgentsNorm:
-            meanAgeAtDeathNorm += agent.age
-            agentWealthCollectedNorm += agent.wealth - (agent.lastSugar + agent.lastSpice)
-            totalWealthLostNorm += agent.sugar + agent.spice
-            agentStarvationDeathsNorm += 1 if agent.causeOfDeath == "starvation" else 0
-            agentDiseaseDeathsNorm += 1 if agent.causeOfDeath == "disease" else 0
-            agentCombatDeathsNorm += 1 if agent.causeOfDeath == "combat" else 0
-            agentAgingDeathsNorm += 1 if agent.causeOfDeath == "aging" else 0
-        meanAgeAtDeathNorm = round(meanAgeAtDeathNorm / numDeadAgentsNorm, 2) if numDeadAgentsNorm > 0 else 0
-        self.deadAgentsNorm = []
-
-        numDeathNorm = numDeadAgentsNorm #how many normal deaths each timestep
-        numDeathDep = numDeadAgentsDep #how many depressed deaths each timestep
-
-        self.runtimeStats["timestep"] = self.timestep
-        self.runtimeStats["population"] = numAgents
-        self.runtimeStats["meanMetabolism"] = meanMetabolism
-        self.runtimeStats["meanMovement"] = meanMovement
-        self.runtimeStats["meanVision"] = meanVision
-        self.runtimeStats["meanAge"] = meanAge
+        for agent in self.bornAgents:
+            if group != None and agent.isInGroup(group, notInGroup) == False:
+                continue
+            agentsBorn += 1
 
         # TODO: make clear whether agent or environment calculation
-        self.runtimeStats["meanWealth"] = meanWealth
-        self.runtimeStats["meanWealthDep"] = meanWealthDep
-        self.runtimeStats["meanWealthNorm"] = meanWealthNorm
-        self.runtimeStats["minWealth"] = minWealth
-        self.runtimeStats["maxWealth"] = maxWealth
-        self.runtimeStats["meanHappiness"] = meanHappiness
-        self.runtimeStats["meanWealthHappiness"] = meanWealthHappiness
-        self.runtimeStats["meanHealthHappiness"] = meanHealthHappiness
-        self.runtimeStats["meanFamilyHappiness"] = meanFamilyHappiness
-        self.runtimeStats["meanSocialHappiness"] = meanSocialHappiness
-        self.runtimeStats["meanConflictHappiness"] = meanConflictHappiness
-        self.runtimeStats["meanTradePrice"] = meanTradePrice
-        self.runtimeStats["tradeVolume"] = tradeVolume
-        self.runtimeStats["giniCoefficient"] = self.updateGiniCoefficient() if len(self.agents) > 1 else 0
-        self.runtimeStats["meanAgeAtDeath"] = meanAgeAtDeath
-        self.runtimeStats["meanAgeAtDeathDep"] = meanAgeAtDeathDep
-        self.runtimeStats["meanAgeAtDeathNorm"] = meanAgeAtDeathNorm
-        self.runtimeStats["totalWealthLost"] += totalWealthLost
-        self.runtimeStats["totalWealthLostDep"] = totalWealthLostDep
-        self.runtimeStats["totalWealthLostNorm"] = totalWealthLostNorm
-        self.runtimeStats["totalMetabolismCost"] += totalMetabolismCost
+        runtimeStats = {"agentAgingDeaths": agentAgingDeaths, "agentCombatDeaths": agentCombatDeaths, "agentDeaths": numDeadAgents,
+                        "agentDiseaseDeaths": agentDiseaseDeaths, "agentMeanTimeToLive": agentMeanTimeToLive, "agentsBorn": agentsBorn,
+                        "agentsReplaced": agentsReplaced, "agentStarvationDeaths": agentStarvationDeaths, "agentTotalMetabolism": agentTotalMetabolism,
+                        "agentWealthBurnRate": agentWealthBurnRate, "agentWealthCollected": agentWealthCollected, "agentWealthTotal": agentWealthTotal,
+                        "carryingCapacity": carryingCapacity, "largestTribe": maxTribe, "largestTribeSize": maxTribeSize, "maxWealth": maxWealth,
+                        "meanAge": meanAge, "meanAgeAtDeath": meanAgeAtDeath, "meanConflictHappiness": meanConflictHappiness,
+                        "meanFamilyHappiness": meanFamilyHappiness, "meanHappiness": meanHappiness, "meanHealthHappiness": meanHealthHappiness,
+                        "meanMetabolism": meanMetabolism, "meanMovement": meanMovement, "meanSocialHappiness": meanSocialHappiness,
+                        "meanTradePrice": meanTradePrice, "meanWealth": meanWealth, "meanWealthHappiness": meanWealthHappiness, "meanVision": meanVision,
+                        "minWealth": minWealth, "population": numAgents, "sickAgents": sickAgents, "remainingTribes": remainingTribes,
+                        "tradeVolume": tradeVolume, "meanDeathsPercentage": meanDeathsPercentage, "sickAgentsPercentage": sickAgentsPercentage, 
+                        "c1": c1, "c2": c2, "c3": c3, "c4": c4, "t1": t1, "t2": t2, "t3": t3, "t4": t4, "l1": l1, "l2": l2, "l3": l3, "l4": l4, 
+                        "r1": r1, "r2": r2, "r3": r3, "r4": r4, "d1": d1, "d2": d2, "d3": d3, "d4": d4}
 
-        self.runtimeStats["agentStarvationDeaths"] = agentStarvationDeaths
-        self.runtimeStats["agentDiseaseDeaths"] = agentDiseaseDeaths
-        self.runtimeStats["agentCombatDeaths"] = agentCombatDeaths
-        self.runtimeStats["agentAgingDeaths"] = agentAgingDeaths
-        self.runtimeStats["agentsReplaced"] = self.agentsReplaced
-        self.runtimeStats["agentsBorn"] = self.agentsBorn
-        self.runtimeStats["agentStarvationDeathsDep"] = agentStarvationDeathsDep
-        self.runtimeStats["agentDiseaseDeathsDep"] = agentDiseaseDeathsDep
-        self.runtimeStats["agentCombatDeathsDep"] = agentCombatDeathsDep
-        self.runtimeStats["agentAgingDeathsDep"] = agentAgingDeathsDep
-        self.runtimeStats["agentStarvationDeathsNorm"] = agentStarvationDeathsNorm
-        self.runtimeStats["agentDiseaseDeathsNorm"] = agentDiseaseDeathsNorm
-        self.runtimeStats["agentCombatDeathsNorm"] = agentCombatDeathsNorm
-        self.runtimeStats["agentAgingDeathsNorm"] = agentAgingDeathsNorm
-        self.agentsReplaced = 0
-        self.agentsBorn = 0
-        self.runtimeStats["agentWealthCollected"] = agentWealthCollected
-        self.runtimeStats["agentWealthCollectedDep"] = agentWealthCollectedDep
-        self.runtimeStats["agentWealthCollectedNorm"] = agentWealthCollectedNorm
-        self.runtimeStats["agentWealthTotal"] = agentWealthTotal
-        self.runtimeStats["agentWealthTotalDep"] = agentWealthTotalDep
-        self.runtimeStats["agentWealthTotalNorm"] = agentWealthTotalNorm
-        self.runtimeStats["agentWealthBurnRate"] = agentWealthBurnRate
-        self.runtimeStats["agentMeanTimeToLive"] = agentMeanTimeToLive
-        self.runtimeStats["environmentWealthCreated"] = environmentWealthCreated
-        self.runtimeStats["environmentWealthTotal"] = environmentWealthTotal
+        if group == None:
+            self.runtimeStats["environmentWealthCreated"] = environmentWealthCreated
+            self.runtimeStats["environmentWealthTotal"] = environmentWealthTotal
+            self.runtimeStats["giniCoefficient"] = self.updateGiniCoefficient()
+            self.runtimeStats["timestep"] = self.timestep
+            self.bornAgents = []
+            self.replacedAgents = []
+            self.deadAgents = []
+        else:
+            # Convert keys to Pythonic case scheme
+            groupString = group if notInGroup == False else "control"
+            groupStats = {}
+            for key in runtimeStats.keys():
+                groupKey = groupString + key[0].upper() + key[1:]
+                groupStats[groupKey] = runtimeStats[key]
+            runtimeStats = groupStats
 
-        self.runtimeStats["agentTotalMetabolism"] = agentTotalMetabolism
-        self.runtimeStats["totalSickAgents"] = totalSickAgents
-
-        self.runtimeStats["popDep"] = numAgentsDep
-        self.runtimeStats["popNorm"] = numAgentsNorm
-        self.runtimeStats["maxPopDep"] = maxPopDep
-        self.runtimeStats["maxPopNorm"] = maxPopNorm
-        self.runtimeStats["deathDep"] = numDeathDep
-        self.runtimeStats["deathNorm"] = numDeathNorm
+        for key in runtimeStats.keys():
+            self.runtimeStats[key] = runtimeStats[key]
 
     def writeToLog(self):
         if self.log == None:
@@ -1080,14 +1135,14 @@ class Sugarscape:
             # Ensure consistent ordering for CSV format
             for stat in sorted(self.runtimeStats):
                 if logString == "":
-                    logString += "{self.runtimeStats[stat]}"
+                    logString += f"{self.runtimeStats[stat]}"
                 else:
-                    logString += ",{self.runtimeStats[stat]}"
+                    logString += f",{self.runtimeStats[stat]}"
             logString += "\n"
         self.log.write(logString)
 
     def __str__(self):
-        string = "{str(self.environment)}Seed: {self.seed}\nTimestep: {self.timestep}\nLiving Agents: {len(self.agents)}"
+        string = f"{str(self.environment)}Seed: {self.seed}\nTimestep: {self.timestep}\nLiving Agents: {len(self.agents)}"
         return string
 
 def parseConfiguration(configFile, configuration):
@@ -1158,15 +1213,16 @@ def verifyConfiguration(configuration):
                 configValue = 0
                 negativeFlag += 1
     if negativeFlag > 0:
-        print("Detected negative values provided for {negativeFlag} option(s). Setting these values to zero.")
+        print(f"Detected negative values provided for {negativeFlag} option(s). Setting these values to zero.")
 
-    if len(configuration["environmentStartingQuadrants"]) == 0:
-        configuration["environmentStartingQuadrants"] = [1, 2, 3, 4]
 
     if configuration["environmentQuadrantSizeFactor"] > 1 or configuration["environmentQuadrantSizeFactor"] < 0:
         if "all" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-            print("Cannot have a quadrant size factor of {configuration['environmentQuadrantSizeFactor']}. Setting quadrant size factor to 1.")
+            print(f"Cannot have a quadrant size factor of {configuration['environmentQuadrantSizeFactor']}. Setting quadrant size factor to 1.")
         configuration["environmentQuadrantSizeFactor"] = 1
+
+    if len(configuration["environmentStartingQuadrants"]) == 0:
+        configuration["environmentStartingQuadrants"] = [1, 2, 3, 4]
 
     if configuration["environmentTribePerQuadrant"] == True:
         configuration["environmentMaxTribes"] = len(configuration["environmentStartingQuadrants"])
@@ -1176,65 +1232,83 @@ def verifyConfiguration(configuration):
     totalCells = totalCells * (configuration["environmentQuadrantSizeFactor"] ** 2) * len(configuration["environmentStartingQuadrants"]) / 4
     if configuration["startingAgents"] > totalCells:
         if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"]:
-            print("Could not allocate {configuration['startingAgents']} agents. Allocating maximum of {totalCells} agents.")
+            print(f"Could not allocate {configuration['startingAgents']} agents. Allocating maximum of {totalCells} agents.")
         configuration["startingAgents"] = totalCells
 
+    # Set timesteps to (seemingly) unlimited runtime
+    if configuration["timesteps"] < 0:
+        if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
+            print("Cannot have a negative amount of timesteps. Setting timesetup to unlimited runtime.")
+        configuration["timesteps"] = sys.maxsize
+
     # Ensure infinitely-lived agents are properly initialized
+    if configuration["agentDecisionModelTribalFactor"][0] < 0:
+        if configuration["agentDecisionModelTribalFactor"][1] != -1:
+            if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
+                print(
+                    f"Cannot have age tribal factor range of {configuration['agentDecisionModelTribalFactor']}. Disabling agent tribal factor.")
+        configuration["agentDecisionModelTribalFactor"] = [-1, -1]
+    elif configuration["agentDecisionModelTribalFactor"][1] > 1:
+        if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
+            print(
+                f"Cannot have agent maximum tribal factor of {configuration['agentDecisionModelTribalFactor'][1]}. Setting agent maximum tribal factor to 1.0.")
+        configuration["agentDecisionModelTribalFactor"][1] = 1
+
     if configuration["agentMaxAge"][0] < 0:
         if configuration["agentMaxAge"][1] != -1:
             if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-                print("Agent cannot have agent maximum age range of {configuration['agentMaxAge']}. Setting agents to live infinitely.")
+                print(f"Agent cannot have agent maximum age range of {configuration['agentMaxAge']}. Setting agents to live infinitely.")
         configuration["agentMaxAge"] = [-1, -1]
 
     if configuration["agentSelfishnessFactor"][0] < 0:
         if configuration["agentSelfishnessFactor"][1] != -1:
             if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-                print("Cannot have agent selfishness factor range of {configuration['agentSelfishnessFactor']}. Disabling agent selfishness.")
+                print(f"Cannot have agent selfishness factor range of {configuration['agentSelfishnessFactor']}. Disabling agent selfishness.")
         configuration["agentSelfishnessFactor"] = [-1, -1]
     elif configuration["agentSelfishnessFactor"][1] > 1:
         if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot have agent maximum selfishness factor of {configuration['agentSelfishnessFactor'][1]}. Setting agent maximum selfishness factor to 1.0.")
+            print(f"Cannot have agent maximum selfishness factor of {configuration['agentSelfishnessFactor'][1]}. Setting agent maximum selfishness factor to 1.0.")
         configuration["agentSelfishnessFactor"][1] = 1
-   
-    if configuration["agentDecisionModelTribalFactor"][0] < 0:
-        if configuration["agentDecisionModelTribalFactor"][1] != -1:
-            if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-                print("Cannot have age tribal factor range of {configuration['agentDecisionModelTribalFactor']}. Disabling agent tribal factor.")
-        configuration["agentDecisionModelTribalFactor"] = [-1, -1]
-    elif configuration["agentDecisionModelTribalFactor"][1] > 1:
-        if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot have agent maximum tribal factor of {configuration['agentDecisionModelTribalFactor'][1]}. Setting agent maximum tribal factor to 1.0.")
-        configuration["agentDecisionModelTribalFactor"][1] = 1
 
     if configuration["agentTagStringLength"] < 0:
         if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot have a negative agent tag string length. Setting agent tag string length to 0.")
+            print(f"Cannot have a negative agent tag string length. Setting agent tag string length to 0.")
         configuration["agentTagStringLength"] = 0
+
     if configuration["environmentMaxTribes"] < 0:
         if "all" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-            print("Cannot have a negative number of tribes. Setting number of tribes to 0.")
+            print(f"Cannot have a negative number of tribes. Setting number of tribes to 0.")
         configuration["environmentMaxTribes"] = 0
     
     # Ensure at most number of tribes is equal to agent tag string length
     if configuration["agentTagStringLength"] > 0 and configuration["environmentMaxTribes"] > configuration["agentTagStringLength"]:
         if "all" in configuration["debugMode"] or "environment" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot have a longer agent tag string length than maximum number of tribes. Setting the number of tribes to {configuration['agentTagStringLength']}.")
+            print(f"Cannot have a longer agent tag string length than maximum number of tribes. Setting the number of tribes to {configuration['agentTagStringLength']}.")
         configuration["environmentMaxTribes"] = configuration["agentTagStringLength"]
 
     # Ensure at most number of tribes and decision models are equal to the number of colors in the GUI
     maxColors = 25
-    if configuration["environmentMaxTribes"] > maxColors:
-        if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-            print("Cannot provide {configuration['environmentMaxTribes']} tribes. Allocating maximum of {maxColors}.")
-        configuration["environmentMaxTribes"] = maxColors
-
     uniqueAgentDecisionModels = set(configuration["agentDecisionModels"])
     numUniqueAgentDecisionModels = len(uniqueAgentDecisionModels)
     if numUniqueAgentDecisionModels > maxColors:
         if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot provide {len(configuration['agentDecisionModels'])} decision models. Allocating maximum of {maxColors}.")
+            print(
+                f"Cannot provide {len(configuration['agentDecisionModels'])} decision models. Allocating maximum of {maxColors}.")
         removeDecisionModels = uniqueAgentDecisionModels[maxColors:]
-        configuration["agentDecisionModels"] = [i for i in configuration["agentDecisionModels"] if i not in removeDecisionModels]
+        configuration["agentDecisionModels"] = [i for i in configuration["agentDecisionModels"] if
+                                                i not in removeDecisionModels]
+    if configuration["environmentMaxTribes"] > maxColors:
+        if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
+            print(f"Cannot provide {configuration['environmentMaxTribes']} tribes. Allocating maximum of {maxColors}.")
+        configuration["environmentMaxTribes"] = maxColors
+
+    # Ensure experimental group is properly defined or otherwise ignored
+    if configuration["experimentalGroup"] == "":
+        configuration["experimentalGroup"] = None
+    elif configuration["experimentalGroup"] != None and configuration["experimentalGroup"] not in ["depressed", "female", "male", "sick"]:
+        if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
+            print(f"Cannot provide separate log stats for experimental group {configuration['experimentalGroup']}. Disabling separate log stats.")
+        configuration["experimentalGroup"] = None
 
     # Ensure the most number of starting diseases per agent is equal to total starting diseases in the environment
     if configuration["startingDiseasesPerAgent"] != [0, 0]:
@@ -1243,35 +1317,8 @@ def verifyConfiguration(configuration):
         startingDiseases = configuration["startingDiseases"]
         startingDiseasesPerAgent = [min(startingDiseases, numDiseases) for numDiseases in startingDiseasesPerAgent]
         if "all" in configuration["debugMode"] or "disease" in configuration["debugMode"] and startingDiseasesPerAgent != configuration["startingDiseasesPerAgent"]:
-            print("Range of starting diseases per agent exceeds {startingDiseases} starting diseases. Setting range to {startingDiseasesPerAgent}.")
+            print(f"Range of starting diseases per agent exceeds {startingDiseases} starting diseases. Setting range to {startingDiseasesPerAgent}.")
         configuration["startingDiseasesPerAgent"] = startingDiseasesPerAgent
-
-    # Set timesteps to (seemingly) unlimited runtime
-    if configuration["timesteps"] < 0:
-        if "all" in configuration["debugMode"] or "agent" in configuration["debugMode"]:
-            print("Cannot have a negative amount of timesteps. Setting timesetup to unlimited runtime.")
-        configuration["timesteps"] = sys.maxsize
-
-    # Ensure the pollution start and end timesteps are in the proper order
-    if configuration["environmentPollutionTimeframe"] != [0, 0]:
-        pollutionStart, pollutionEnd = configuration["environmentPollutionTimeframe"]
-        if pollutionStart > pollutionEnd and pollutionEnd >= 0:
-            swap = pollutionStart
-            pollutionStart = pollutionEnd
-            pollutionEnd = swap
-            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution start and end values provided in incorrect order. Switching values around.")
-        # If provided a negative value, assume the start timestep is the very first of the simulation
-        if pollutionStart < 0:
-            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution start timestep {pollutionStart} is invalid. Setting pollution start timestep to 0.")
-            pollutionStart = 0
-        # If provided a negative value, assume the end timestep is the very end of the simulation
-        if pollutionEnd < 0:
-            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution end timestep {pollutionEnd} is invalid. Setting pollution end timestep to {configuration['timesteps']}.")
-            pollutionEnd = configuration["timesteps"]
-        configuration["environmentPollutionTimeframe"] = [pollutionStart, pollutionEnd]
 
     # Ensure the pollution diffusion start and end timesteps are in the proper order
     if configuration["environmentPollutionDiffusionTimeframe"] != [0, 0]:
@@ -1281,30 +1328,51 @@ def verifyConfiguration(configuration):
             pollutionDiffusionStart = pollutionDiffusionEnd
             pollutionDiffusionEnd = swap
             if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution diffusion start and end values provided in incorrect order. Switching values around.")
+                print(f"Pollution diffusion start and end values provided in incorrect order. Switching values around.")
         # If provided a negative value, assume the start timestep is the very first of the simulation
         if pollutionDiffusionStart < 0:
             if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution diffusion start timestep {pollutionDiffusionStart} is invalid. Setting pollution diffusion start timestep to 0.")
+                print(f"Pollution diffusion start timestep {pollutionDiffusionStart} is invalid. Setting pollution diffusion start timestep to 0.")
             pollutionDiffusionStart = 0
         # If provided a negative value, assume the end timestep is the very end of the simulation
         if pollutionDiffusionEnd < 0:
             if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
-                print("Pollution diffusion end timestep {pollutionDiffusionEnd} is invalid. Setting pollution diffusion end timestep to {configuration['timesteps']}.")
+                print(f"Pollution diffusion end timestep {pollutionDiffusionEnd} is invalid. Setting pollution diffusion end timestep to {configuration['timesteps']}.")
             pollutionDiffusionEnd = configuration["timesteps"]
         configuration["environmentPollutionDiffusionTimeframe"] = [pollutionDiffusionStart, pollutionDiffusionEnd]
 
-    if configuration["seed"] == -1:
-        configuration["seed"] = random.randrange(sys.maxsize)
+    # Ensure the pollution start and end timesteps are in the proper order
+    if configuration["environmentPollutionTimeframe"] != [0, 0]:
+        pollutionStart, pollutionEnd = configuration["environmentPollutionTimeframe"]
+        if pollutionStart > pollutionEnd and pollutionEnd >= 0:
+            swap = pollutionStart
+            pollutionStart = pollutionEnd
+            pollutionEnd = swap
+            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
+                print(f"Pollution start and end values provided in incorrect order. Switching values around.")
+        # If provided a negative value, assume the start timestep is the very first of the simulation
+        if pollutionStart < 0:
+            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
+                print(f"Pollution start timestep {pollutionStart} is invalid. Setting pollution start timestep to 0.")
+            pollutionStart = 0
+        # If provided a negative value, assume the end timestep is the very end of the simulation
+        if pollutionEnd < 0:
+            if "all" in configuration["debugMode"] or "sugarscape" in configuration["debugMode"] or "environment" in configuration["debugMode"]:
+                print(f"Pollution end timestep {pollutionEnd} is invalid. Setting pollution end timestep to {configuration['timesteps']}.")
+            pollutionEnd = configuration["timesteps"]
+        configuration["environmentPollutionTimeframe"] = [pollutionStart, pollutionEnd]
 
     if configuration["logfile"] == "":
         configuration["logfile"] = None
+
+    if configuration["seed"] == -1:
+        configuration["seed"] = random.randrange(sys.maxsize)
 
     recognizedDebugModes = ["agent", "all", "cell", "disease", "environment", "ethics", "none", "sugarscape"]
     validModes = True
     for mode in configuration["debugMode"]:
         if mode not in recognizedDebugModes:
-            print("Debug mode {mode} not recognized")
+            print(f"Debug mode {mode} not recognized")
             validModes = False
     if validModes == False:
         printHelp()
@@ -1336,7 +1404,7 @@ if __name__ == "__main__":
                      "agentDecisionModelLookaheadDiscount": [0, 0],
                      "agentDecisionModelLookaheadFactor": [0],
                      "agentDecisionModelTribalFactor": [-1, -1],
-                     "agentDepressionAssignment": [0, 0],
+                     "agentDepressionPercentage": 0,
                      "agentFemaleInfertilityAge": [0, 0],
                      "agentFemaleFertilityAge": [0, 0],
                      "agentFertilityFactor": [0, 0],
@@ -1400,6 +1468,7 @@ if __name__ == "__main__":
                      "environmentUniversalSugarIncomeInterval": 0,
                      "environmentWidth": 50,
                      "environmentWraparound": True,
+                     "experimentalGroup": None,
                      "headlessMode": False,
                      "interfaceHeight": 1000,
                      "interfaceWidth": 900,
